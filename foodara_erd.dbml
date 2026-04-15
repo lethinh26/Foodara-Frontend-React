@@ -1,0 +1,1130 @@
+// ============================================================
+// FOODARA DATABASE v3 - COMPLETE ERD (DBML)
+// Dùng trên https://dbdiagram.io
+// ============================================================
+
+// ==========================================
+// 1. USERS, ROLES & AUTH
+// ==========================================
+
+Table users {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  email varchar(255) [unique, not null]
+  password_hash varchar(255) [not null]
+  full_name varchar(255)
+  phone varchar(20)
+  avatar_url varchar(500)
+  status varchar(20) [default: 'active', note: 'active, suspended, banned, deleted']
+  email_verified_at timestamp
+  last_login_at timestamp
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table roles {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(50) [unique, not null, note: 'customer, merchant, driver, admin']
+  description text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table user_roles {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  role_id varchar(36) [not null]
+  granted_at timestamp [default: `NOW()`]
+
+  indexes {
+    (user_id, role_id) [unique]
+  }
+}
+
+Table permissions {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(100) [unique, not null]
+  module varchar(50)
+  description text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table role_permissions {
+  role_id varchar(36) [not null]
+  permission_id varchar(36) [not null]
+
+  indexes {
+    (role_id, permission_id) [pk]
+  }
+}
+
+Table user_sessions {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  token_hash varchar(255) [not null]
+  ip_address varchar(45)
+  user_agent text
+  expires_at timestamp [not null]
+  revoked_at timestamp
+  created_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 2. ĐỊA LÝ & VÙNG PHỤC VỤ
+// ==========================================
+
+Table cities {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  code varchar(20) [unique]
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table districts {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  city_id varchar(36) [not null]
+  name varchar(100) [not null]
+  code varchar(20)
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table service_zones {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  city_id varchar(36)
+  boundary_geojson jsonb
+  is_active boolean [default: true]
+  surge_multiplier decimal(3,2) [default: 1.00]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table user_addresses {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  label varchar(50) [default: 'home', note: 'home, work, other']
+  recipient_name varchar(255)
+  recipient_phone varchar(20)
+  address_line text [not null]
+  ward varchar(100)
+  district_id varchar(36)
+  city_id varchar(36)
+  latitude decimal(10,8)
+  longitude decimal(11,8)
+  is_default boolean [default: false]
+  delivery_note text
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 3. MERCHANT & STORE
+// ==========================================
+
+Table merchants {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  owner_id varchar(36) [not null, note: 'Người đại diện']
+  name varchar(255) [not null, note: 'Tên thương hiệu']
+  tax_code varchar(50)
+  business_email varchar(255)
+  business_phone varchar(20)
+  logo_url varchar(500)
+  cover_image_url varchar(500)
+  approval_status varchar(20) [default: 'pending', note: 'pending, approved, rejected, suspended']
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table store_categories {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  slug varchar(100) [unique]
+  icon_url varchar(500)
+  display_order int [default: 0]
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table stores {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  merchant_id varchar(36) [not null, note: '1 merchant có nhiều chi nhánh']
+  name varchar(255) [not null, note: 'Tên chi nhánh']
+  slug varchar(255) [unique]
+  description text
+  phone varchar(20)
+  address_line text [not null]
+  ward varchar(100)
+  district_id varchar(36)
+  city_id varchar(36)
+  latitude decimal(10,8)
+  longitude decimal(11,8)
+  service_zone_id varchar(36)
+  is_open boolean [default: false]
+  is_active boolean [default: true]
+  auto_accept_orders boolean [default: false]
+  avg_preparation_time int [default: 15]
+  min_order_amount decimal(12,2) [default: 0]
+  max_delivery_radius_km decimal(5,2)
+  avg_rating decimal(3,2) [default: 0.00]
+  total_ratings int [default: 0]
+  total_orders int [default: 0]
+  commission_rate decimal(5,2) [default: 20.00]
+  cover_image_url varchar(500)
+  logo_url varchar(500)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table store_store_categories {
+  store_id varchar(36) [not null]
+  category_id varchar(36) [not null]
+
+  indexes {
+    (store_id, category_id) [pk]
+  }
+}
+
+Table store_tags {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  slug varchar(100) [unique]
+  tag_type varchar(30)
+  icon_url varchar(500)
+  color_hex varchar(7)
+  display_order int [default: 0]
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table store_tag_assignments {
+  store_id varchar(36) [not null]
+  tag_id varchar(36) [not null]
+
+  indexes {
+    (store_id, tag_id) [pk]
+  }
+}
+
+Table store_documents {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  merchant_id varchar(36)
+  store_id varchar(36)
+  document_type varchar(50) [not null, note: 'business_license, food_safety_cert, id_card_front, id_card_back, other']
+  document_url varchar(500) [not null]
+  document_number varchar(100)
+  expiry_date date
+  verification_status varchar(20) [default: 'pending', note: 'pending, verified, rejected']
+  verified_at timestamp
+  verified_by varchar(36)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table store_operating_hours {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  store_id varchar(36) [not null]
+  day_of_week smallint [not null, note: '0=Sun, 6=Sat']
+  open_time time [not null]
+  close_time time [not null]
+  is_closed boolean [default: false]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+
+  indexes {
+    (store_id, day_of_week, open_time) [unique]
+  }
+}
+
+Table store_bank_accounts {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  merchant_id varchar(36) [not null]
+  bank_name varchar(100) [not null]
+  account_number varchar(30) [not null]
+  account_holder varchar(255) [not null]
+  branch varchar(255)
+  is_default boolean [default: true]
+  is_verified boolean [default: false]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 4. MENU & OPTIONS
+// ==========================================
+
+Table menu_categories {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  store_id varchar(36) [not null]
+  name varchar(255) [not null]
+  description text
+  display_order int [default: 0]
+  is_active boolean [default: true]
+  available_from time
+  available_to time
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table menu_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  store_id varchar(36) [not null]
+  category_id varchar(36)
+  name varchar(255) [not null]
+  description text
+  image_url varchar(500)
+  base_price decimal(12,2) [not null]
+  is_available boolean [default: true]
+  is_active boolean [default: true]
+  track_inventory boolean [default: false]
+  stock_quantity int
+  max_quantity_per_order int
+  daily_limit int
+  daily_sold_count int [default: 0]
+  daily_sold_date date
+  is_popular boolean [default: false]
+  is_new boolean [default: false]
+  display_order int [default: 0]
+  avg_rating decimal(3,2) [default: 0.00]
+  total_ratings int [default: 0]
+  total_sold int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table menu_item_tags {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(50) [not null]
+  icon_url varchar(500)
+  color_hex varchar(7)
+  created_at timestamp [default: `NOW()`]
+}
+
+Table menu_item_tag_assignments {
+  menu_item_id varchar(36) [not null]
+  tag_id varchar(36) [not null]
+
+  indexes {
+    (menu_item_id, tag_id) [pk]
+  }
+}
+
+Table option_groups {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  store_id varchar(36) [not null]
+  name varchar(255) [not null, note: 'VD: Size, Topping, Đường, Đá']
+  is_required boolean [default: false]
+  min_selections int [default: 0]
+  max_selections int [default: 1]
+  display_order int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table option_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  option_group_id varchar(36) [not null]
+  name varchar(255) [not null]
+  price_adjustment decimal(12,2) [default: 0]
+  is_available boolean [default: true]
+  is_default boolean [default: false]
+  display_order int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table menu_item_option_groups {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  menu_item_id varchar(36) [not null]
+  option_group_id varchar(36) [not null]
+  display_order int [default: 0]
+
+  indexes {
+    (menu_item_id, option_group_id) [unique]
+  }
+}
+
+// ==========================================
+// 5. COMBOS
+// ==========================================
+
+Table combos {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  store_id varchar(36) [not null]
+  name varchar(255) [not null]
+  description text
+  image_url varchar(500)
+  combo_price decimal(12,2) [not null]
+  original_price decimal(12,2) [note: 'Giá gốc để hiện tiết kiệm']
+  is_active boolean [default: true]
+  starts_at timestamp
+  ends_at timestamp
+  display_order int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table combo_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  combo_id varchar(36) [not null]
+  menu_item_id varchar(36) [not null]
+  quantity int [default: 1]
+  created_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 6. BANNERS, CAMPAIGNS & VOUCHERS
+// ==========================================
+
+Table banners {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  title varchar(255)
+  image_url varchar(500) [not null]
+  target_url varchar(500)
+  target_type varchar(30) [note: 'campaign, store, category, external, none']
+  target_id varchar(36)
+  position varchar(50) [default: 'home_top']
+  display_order int [default: 0]
+  is_active boolean [default: true]
+  starts_at timestamp
+  ends_at timestamp
+  created_at timestamp [default: `NOW()`]
+}
+
+Table campaigns {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null]
+  description text
+  campaign_type varchar(30) [default: 'promotion', note: 'promotion, flash_sale, free_ship, seasonal, custom']
+  banner_url varchar(500)
+  is_active boolean [default: true]
+  starts_at timestamp
+  ends_at timestamp
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table campaign_participants {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  campaign_id varchar(36) [not null]
+  store_id varchar(36) [not null]
+  status varchar(20) [default: 'active', note: 'pending, active, rejected, ended']
+  joined_at timestamp [default: `NOW()`]
+  ended_at timestamp
+
+  indexes {
+    (campaign_id, store_id) [unique]
+  }
+}
+
+Table vouchers {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  campaign_id varchar(36)
+  merchant_id varchar(36) [note: 'NULL = voucher sàn']
+  store_id varchar(36) [note: 'Áp dụng cho 1 chi nhánh']
+  code varchar(50) [unique, not null]
+  title varchar(255)
+  description text
+  discount_type varchar(20) [note: 'percentage, fixed, free_ship']
+  discount_value decimal(12,2) [not null]
+  min_order_value decimal(12,2) [default: 0]
+  max_discount_value decimal(12,2)
+  total_quantity int
+  used_quantity int [default: 0]
+  user_usage_limit int [default: 1]
+  is_stackable boolean [default: false]
+  applicable_to varchar(20) [default: 'all', note: 'all, new_user, vip']
+  starts_at timestamp
+  expires_at timestamp
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 7. CART & ORDERS
+// ==========================================
+
+Table carts {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  store_id varchar(36) [not null]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+
+  indexes {
+    (user_id, store_id) [unique]
+  }
+}
+
+Table cart_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  cart_id varchar(36) [not null]
+  menu_item_id varchar(36) [not null]
+  combo_id varchar(36)
+  quantity int [not null, default: 1]
+  unit_price decimal(12,2) [not null]
+  special_instructions text
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table cart_item_options {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  cart_item_id varchar(36) [not null]
+  option_item_id varchar(36) [not null]
+  price_adjustment decimal(12,2) [default: 0]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table orders {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_number varchar(50) [unique, not null]
+  customer_id varchar(36) [not null]
+  store_id varchar(36) [not null]
+  driver_id varchar(36)
+  status varchar(30) [not null, default: 'pending', note: 'pending→confirmed→preparing→ready_for_pickup→driver_assigned→picked_up→delivering→delivered→completed']
+  delivery_address_id varchar(36)
+  delivery_address_snapshot jsonb
+  delivery_latitude decimal(10,8)
+  delivery_longitude decimal(11,8)
+  delivery_note text
+  store_name varchar(255)
+  store_address text
+  store_latitude decimal(10,8)
+  store_longitude decimal(11,8)
+  subtotal decimal(12,2) [not null]
+  delivery_fee decimal(12,2) [default: 0]
+  delivery_fee_discount decimal(12,2) [default: 0]
+  platform_fee decimal(12,2) [default: 0]
+  surge_fee decimal(12,2) [default: 0]
+  store_discount decimal(12,2) [default: 0]
+  voucher_discount decimal(12,2) [default: 0]
+  total_amount decimal(12,2) [not null]
+  platform_voucher_id varchar(36)
+  store_voucher_id varchar(36)
+  payment_method varchar(30) [note: 'cod, e_wallet, card, bank_transfer, qr']
+  payment_status varchar(20) [default: 'pending', note: 'pending, paid, failed, refunded']
+  estimated_prep_time int
+  estimated_delivery_time int
+  estimated_total_time int
+  placed_at timestamp [default: `NOW()`]
+  confirmed_at timestamp
+  preparing_at timestamp
+  ready_at timestamp
+  picked_up_at timestamp
+  delivered_at timestamp
+  completed_at timestamp
+  cancelled_at timestamp
+  cancelled_by varchar(20) [note: 'customer, store, driver, admin, system']
+  cancellation_reason text
+  delivery_distance_km decimal(5,2)
+  commission_rate decimal(5,2)
+  commission_amount decimal(12,2)
+  pickup_code varchar(10)
+  delivery_otp varchar(6)
+  delivery_proof_url varchar(500)
+  store_response_deadline timestamp
+  store_responded_at timestamp
+  is_reorder boolean [default: false]
+  original_order_id varchar(36)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table voucher_usage {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  voucher_id varchar(36) [not null]
+  user_id varchar(36) [not null]
+  order_id varchar(36) [not null]
+  discount_amount decimal(12,2) [not null]
+  used_at timestamp [default: `NOW()`]
+}
+
+Table order_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  menu_item_id varchar(36)
+  combo_id varchar(36)
+  item_name varchar(255) [not null]
+  item_image_url varchar(500)
+  quantity int [not null, default: 1]
+  unit_price decimal(12,2) [not null]
+  total_price decimal(12,2) [not null]
+  options_snapshot jsonb
+  special_instructions text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table order_item_options {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_item_id varchar(36) [not null]
+  option_item_id varchar(36)
+  option_group_name varchar(255)
+  option_name varchar(255) [not null]
+  price_adjustment decimal(12,2) [default: 0]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table order_status_history {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  from_status varchar(30)
+  to_status varchar(30) [not null]
+  changed_by varchar(36)
+  changed_by_role varchar(20)
+  note text
+  metadata jsonb
+  created_at timestamp [default: `NOW()`]
+}
+
+Table order_assignments {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  driver_id varchar(36) [not null]
+  assignment_type varchar(20) [default: 'auto', note: 'auto, manual']
+  status varchar(20) [not null, note: 'proposed, accepted, rejected, timeout, cancelled']
+  proposed_at timestamp [default: `NOW()`]
+  responded_at timestamp
+  response_deadline timestamp
+  distance_to_store_km decimal(5,2)
+  estimated_pickup_time int
+  rejection_reason text
+  created_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 8. THANH TOÁN
+// ==========================================
+
+Table payments {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  user_id varchar(36) [not null]
+  payment_method varchar(30) [not null]
+  payment_provider varchar(50)
+  amount decimal(12,2) [not null]
+  currency varchar(3) [default: 'VND']
+  status varchar(20) [not null, default: 'pending', note: 'pending, processing, completed, failed, refunded']
+  provider_transaction_id varchar(255)
+  provider_response jsonb
+  paid_at timestamp
+  failed_at timestamp
+  retry_count int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table payment_transactions {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  payment_id varchar(36) [not null]
+  transaction_type varchar(20) [not null, note: 'charge, refund, retry']
+  amount decimal(12,2) [not null]
+  status varchar(20) [not null, note: 'initiated, success, failed']
+  provider_transaction_id varchar(255)
+  provider_response jsonb
+  error_code varchar(50)
+  error_message text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table refunds {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  payment_id varchar(36) [not null]
+  refund_amount decimal(12,2) [not null]
+  refund_type varchar(20) [note: 'full, partial']
+  reason text
+  status varchar(20) [default: 'pending', note: 'pending, processing, completed, failed']
+  initiated_by varchar(36)
+  initiated_by_role varchar(20)
+  provider_refund_id varchar(255)
+  completed_at timestamp
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 9. TÀI XẾ
+// ==========================================
+
+Table drivers {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [unique, not null]
+  full_name varchar(255) [not null]
+  phone varchar(20) [not null]
+  date_of_birth date
+  id_number varchar(20)
+  vehicle_type varchar(20) [note: 'motorcycle, bicycle, car']
+  vehicle_plate varchar(20)
+  vehicle_brand varchar(100)
+  vehicle_color varchar(50)
+  approval_status varchar(20) [default: 'pending', note: 'pending, approved, rejected, suspended']
+  approved_at timestamp
+  approved_by varchar(36)
+  rejection_reason text
+  is_online boolean [default: false]
+  is_busy boolean [default: false]
+  service_zone_id varchar(36)
+  current_latitude decimal(10,8)
+  current_longitude decimal(11,8)
+  location_updated_at timestamp
+  avg_rating decimal(3,2) [default: 0.00]
+  total_ratings int [default: 0]
+  total_deliveries int [default: 0]
+  acceptance_rate decimal(5,2) [default: 100.00]
+  completion_rate decimal(5,2) [default: 100.00]
+  wallet_balance decimal(12,2) [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table driver_documents {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  document_type varchar(50) [not null, note: 'id_card, driving_license, vehicle_registration, portrait']
+  document_url varchar(500) [not null]
+  document_number varchar(100)
+  expiry_date date
+  verification_status varchar(20) [default: 'pending']
+  verified_at timestamp
+  verified_by varchar(36)
+  rejection_reason text
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table driver_shifts {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  zone_id varchar(36)
+  went_online_at timestamp [not null]
+  went_offline_at timestamp
+  duration_minutes int
+  total_orders int [default: 0]
+  total_earnings decimal(12,2) [default: 0]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table driver_locations {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  order_id varchar(36)
+  latitude decimal(10,8) [not null]
+  longitude decimal(11,8) [not null]
+  heading decimal(5,2)
+  speed decimal(5,2)
+  accuracy decimal(5,2)
+  recorded_at timestamp [default: `NOW()`]
+}
+
+Table driver_wallet_transactions {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  transaction_type varchar(30) [not null, note: 'delivery_earning, tip, bonus, cod_collected, withdrawal, incentive']
+  amount decimal(12,2) [not null]
+  balance_after decimal(12,2)
+  reference_type varchar(30)
+  reference_id varchar(36)
+  description text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table driver_bank_accounts {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  bank_name varchar(100) [not null]
+  account_number varchar(30) [not null]
+  account_holder varchar(255) [not null]
+  branch varchar(255)
+  is_default boolean [default: true]
+  is_verified boolean [default: false]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 10. DRIVER INCENTIVE PROGRAMS
+// ==========================================
+
+Table driver_incentive_programs {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  name varchar(255) [not null]
+  description text
+  zone_id varchar(36)
+  target_type varchar(30) [not null, note: 'daily_orders, weekly_orders, acceptance_rate, peak_hour']
+  target_value int [not null]
+  bonus_amount decimal(12,2) [not null]
+  max_participants int
+  starts_at timestamp
+  ends_at timestamp
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table driver_incentive_progress {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  program_id varchar(36) [not null]
+  driver_id varchar(36) [not null]
+  current_value int [default: 0]
+  is_completed boolean [default: false]
+  completed_at timestamp
+  bonus_paid boolean [default: false]
+  paid_at timestamp
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+
+  indexes {
+    (program_id, driver_id) [unique]
+  }
+}
+
+// ==========================================
+// 11. ĐÁNH GIÁ & YÊU THÍCH
+// ==========================================
+
+Table reviews {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  order_id varchar(36) [not null]
+  user_id varchar(36) [not null]
+  store_id varchar(36)
+  store_rating smallint [note: '1-5']
+  store_comment text
+  driver_id varchar(36)
+  driver_rating smallint [note: '1-5']
+  driver_comment text
+  is_anonymous boolean [default: false]
+  status varchar(20) [default: 'active', note: 'active, hidden, flagged, deleted']
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table review_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  review_id varchar(36) [not null]
+  menu_item_id varchar(36)
+  rating smallint [note: '1-5']
+  comment text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table review_images {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  review_id varchar(36) [not null]
+  image_url varchar(500) [not null]
+  created_at timestamp [default: `NOW()`]
+}
+
+Table user_favorite_stores {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  store_id varchar(36) [not null]
+  created_at timestamp [default: `NOW()`]
+
+  indexes {
+    (user_id, store_id) [unique]
+  }
+}
+
+Table user_favorite_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  menu_item_id varchar(36) [not null]
+  created_at timestamp [default: `NOW()`]
+
+  indexes {
+    (user_id, menu_item_id) [unique]
+  }
+}
+
+// ==========================================
+// 12. ĐỐI SOÁT & SETTLEMENTS
+// ==========================================
+
+Table store_settlements {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  merchant_id varchar(36) [not null]
+  period_start date [not null]
+  period_end date [not null]
+  total_orders int [default: 0]
+  total_gmv decimal(14,2) [default: 0]
+  total_commission decimal(14,2) [default: 0]
+  total_voucher_subsidy decimal(14,2) [default: 0]
+  total_deductions decimal(14,2) [default: 0]
+  net_amount decimal(14,2) [default: 0]
+  status varchar(20) [default: 'pending', note: 'pending, confirmed, paid, disputed']
+  paid_at timestamp
+  payment_reference varchar(255)
+  created_by varchar(36)
+  confirmed_by varchar(36)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table store_settlement_items {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  settlement_id varchar(36) [not null]
+  store_id varchar(36) [not null]
+  order_id varchar(36) [not null]
+  order_subtotal decimal(12,2)
+  commission_amount decimal(12,2)
+  voucher_subsidy decimal(12,2)
+  deduction decimal(12,2)
+  net_amount decimal(12,2)
+  created_at timestamp [default: `NOW()`]
+}
+
+Table driver_settlements {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  driver_id varchar(36) [not null]
+  period_start date [not null]
+  period_end date [not null]
+  total_deliveries int [default: 0]
+  total_delivery_earnings decimal(14,2) [default: 0]
+  total_tips decimal(14,2) [default: 0]
+  total_bonuses decimal(14,2) [default: 0]
+  total_cod_collected decimal(14,2) [default: 0]
+  total_cod_transferred decimal(14,2) [default: 0]
+  total_deductions decimal(14,2) [default: 0]
+  net_amount decimal(14,2) [default: 0]
+  status varchar(20) [default: 'pending']
+  paid_at timestamp
+  payment_reference varchar(255)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// 13. CẤU HÌNH, THÔNG BÁO & THỐNG KÊ
+// ==========================================
+
+Table delivery_fee_configs {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  zone_id varchar(36)
+  base_fee decimal(12,2) [not null]
+  base_distance_km decimal(5,2) [not null]
+  per_km_fee decimal(12,2) [not null]
+  surge_enabled boolean [default: false]
+  surge_multiplier decimal(3,2) [default: 1.00]
+  surge_start_time time
+  surge_end_time time
+  rain_surge_multiplier decimal(3,2) [default: 1.00]
+  is_active boolean [default: true]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table platform_configs {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  config_key varchar(100) [unique, not null]
+  config_value text [not null]
+  config_type varchar(20) [default: 'string', note: 'string, int, float, boolean, json']
+  description text
+  is_editable boolean [default: true]
+  updated_by varchar(36)
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+Table notifications {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  title varchar(255) [not null]
+  body text
+  image_url varchar(500)
+  notification_type varchar(50) [note: 'order_status, promotion, system, review_reminder, driver_assigned, payment, incentive']
+  reference_type varchar(30)
+  reference_id varchar(36)
+  channel varchar(20) [default: 'push', note: 'push, in_app, sms, email']
+  is_read boolean [default: false]
+  read_at timestamp
+  sent_at timestamp
+  expires_at timestamp
+  created_at timestamp [default: `NOW()`]
+}
+
+Table admin_audit_logs {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  admin_id varchar(36) [not null]
+  action varchar(100) [not null]
+  module varchar(50)
+  entity_type varchar(50)
+  entity_id varchar(36)
+  old_values jsonb
+  new_values jsonb
+  ip_address varchar(45)
+  user_agent text
+  created_at timestamp [default: `NOW()`]
+}
+
+Table search_history {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  user_id varchar(36) [not null]
+  search_query varchar(500) [not null]
+  search_type varchar(20) [note: 'store, item, category, keyword']
+  result_count int
+  created_at timestamp [default: `NOW()`]
+}
+
+Table daily_platform_stats {
+  id varchar(36) [pk, default: `gen_random_uuid()`]
+  stat_date date [unique, not null]
+  total_orders int [default: 0]
+  total_completed_orders int [default: 0]
+  total_cancelled_orders int [default: 0]
+  total_gmv decimal(14,2) [default: 0]
+  total_revenue decimal(14,2) [default: 0]
+  avg_order_value decimal(12,2) [default: 0]
+  avg_delivery_time_minutes int [default: 0]
+  cancellation_rate decimal(5,2) [default: 0]
+  new_users int [default: 0]
+  new_stores int [default: 0]
+  new_drivers int [default: 0]
+  active_users int [default: 0]
+  active_stores int [default: 0]
+  active_drivers int [default: 0]
+  created_at timestamp [default: `NOW()`]
+  updated_at timestamp [default: `NOW()`]
+}
+
+// ==========================================
+// RELATIONSHIPS
+// ==========================================
+
+// -- Users & Auth
+Ref: user_roles.user_id > users.id [delete: cascade]
+Ref: user_roles.role_id > roles.id [delete: cascade]
+Ref: role_permissions.role_id > roles.id [delete: cascade]
+Ref: role_permissions.permission_id > permissions.id [delete: cascade]
+Ref: user_sessions.user_id > users.id [delete: cascade]
+
+// -- Geography
+Ref: districts.city_id > cities.id
+Ref: service_zones.city_id > cities.id
+Ref: user_addresses.user_id > users.id [delete: cascade]
+Ref: user_addresses.district_id > districts.id
+Ref: user_addresses.city_id > cities.id
+
+// -- Merchant & Store
+Ref: merchants.owner_id > users.id
+Ref: stores.merchant_id > merchants.id [delete: cascade]
+Ref: stores.district_id > districts.id
+Ref: stores.city_id > cities.id
+Ref: stores.service_zone_id > service_zones.id
+Ref: store_store_categories.store_id > stores.id [delete: cascade]
+Ref: store_store_categories.category_id > store_categories.id [delete: cascade]
+Ref: store_tag_assignments.store_id > stores.id [delete: cascade]
+Ref: store_tag_assignments.tag_id > store_tags.id [delete: cascade]
+Ref: store_documents.merchant_id > merchants.id [delete: cascade]
+Ref: store_documents.store_id > stores.id [delete: cascade]
+Ref: store_documents.verified_by > users.id
+Ref: store_operating_hours.store_id > stores.id [delete: cascade]
+Ref: store_bank_accounts.merchant_id > merchants.id [delete: cascade]
+
+// -- Menu & Options
+Ref: menu_categories.store_id > stores.id [delete: cascade]
+Ref: menu_items.store_id > stores.id [delete: cascade]
+Ref: menu_items.category_id > menu_categories.id [delete: set null]
+Ref: menu_item_tag_assignments.menu_item_id > menu_items.id [delete: cascade]
+Ref: menu_item_tag_assignments.tag_id > menu_item_tags.id [delete: cascade]
+Ref: option_groups.store_id > stores.id [delete: cascade]
+Ref: option_items.option_group_id > option_groups.id [delete: cascade]
+Ref: menu_item_option_groups.menu_item_id > menu_items.id [delete: cascade]
+Ref: menu_item_option_groups.option_group_id > option_groups.id [delete: cascade]
+
+// -- Combos
+Ref: combos.store_id > stores.id [delete: cascade]
+Ref: combo_items.combo_id > combos.id [delete: cascade]
+Ref: combo_items.menu_item_id > menu_items.id [delete: cascade]
+
+// -- Campaigns & Vouchers
+Ref: campaign_participants.campaign_id > campaigns.id [delete: cascade]
+Ref: campaign_participants.store_id > stores.id [delete: cascade]
+Ref: vouchers.campaign_id > campaigns.id
+Ref: vouchers.merchant_id > merchants.id
+Ref: vouchers.store_id > stores.id
+
+// -- Cart
+Ref: carts.user_id > users.id [delete: cascade]
+Ref: carts.store_id > stores.id [delete: cascade]
+Ref: cart_items.cart_id > carts.id [delete: cascade]
+Ref: cart_items.menu_item_id > menu_items.id
+Ref: cart_items.combo_id > combos.id
+Ref: cart_item_options.cart_item_id > cart_items.id [delete: cascade]
+Ref: cart_item_options.option_item_id > option_items.id
+
+// -- Orders
+Ref: orders.customer_id > users.id
+Ref: orders.store_id > stores.id
+Ref: orders.driver_id > users.id
+Ref: orders.delivery_address_id > user_addresses.id
+Ref: orders.platform_voucher_id > vouchers.id
+Ref: orders.store_voucher_id > vouchers.id
+Ref: orders.original_order_id > orders.id
+Ref: voucher_usage.voucher_id > vouchers.id
+Ref: voucher_usage.user_id > users.id
+Ref: voucher_usage.order_id > orders.id
+Ref: order_items.order_id > orders.id [delete: cascade]
+Ref: order_items.menu_item_id > menu_items.id
+Ref: order_items.combo_id > combos.id
+Ref: order_item_options.order_item_id > order_items.id [delete: cascade]
+Ref: order_item_options.option_item_id > option_items.id
+Ref: order_status_history.order_id > orders.id [delete: cascade]
+Ref: order_status_history.changed_by > users.id
+Ref: order_assignments.order_id > orders.id
+Ref: order_assignments.driver_id > users.id
+
+// -- Payments
+Ref: payments.order_id > orders.id
+Ref: payments.user_id > users.id
+Ref: payment_transactions.payment_id > payments.id
+Ref: refunds.order_id > orders.id
+Ref: refunds.payment_id > payments.id
+Ref: refunds.initiated_by > users.id
+
+// -- Drivers
+Ref: drivers.user_id > users.id
+Ref: drivers.approved_by > users.id
+Ref: drivers.service_zone_id > service_zones.id
+Ref: driver_documents.driver_id > drivers.id [delete: cascade]
+Ref: driver_documents.verified_by > users.id
+Ref: driver_shifts.driver_id > drivers.id
+Ref: driver_shifts.zone_id > service_zones.id
+Ref: driver_locations.driver_id > drivers.id
+Ref: driver_locations.order_id > orders.id
+Ref: driver_wallet_transactions.driver_id > drivers.id
+Ref: driver_bank_accounts.driver_id > drivers.id [delete: cascade]
+
+// -- Driver Incentives
+Ref: driver_incentive_programs.zone_id > service_zones.id
+Ref: driver_incentive_progress.program_id > driver_incentive_programs.id [delete: cascade]
+Ref: driver_incentive_progress.driver_id > drivers.id [delete: cascade]
+
+// -- Reviews & Favorites
+Ref: reviews.order_id > orders.id
+Ref: reviews.user_id > users.id
+Ref: reviews.store_id > stores.id
+Ref: reviews.driver_id > drivers.id
+Ref: review_items.review_id > reviews.id [delete: cascade]
+Ref: review_items.menu_item_id > menu_items.id
+Ref: review_images.review_id > reviews.id [delete: cascade]
+Ref: user_favorite_stores.user_id > users.id [delete: cascade]
+Ref: user_favorite_stores.store_id > stores.id [delete: cascade]
+Ref: user_favorite_items.user_id > users.id [delete: cascade]
+Ref: user_favorite_items.menu_item_id > menu_items.id [delete: cascade]
+
+// -- Settlements
+Ref: store_settlements.merchant_id > merchants.id
+Ref: store_settlements.created_by > users.id
+Ref: store_settlements.confirmed_by > users.id
+Ref: store_settlement_items.settlement_id > store_settlements.id [delete: cascade]
+Ref: store_settlement_items.store_id > stores.id
+Ref: store_settlement_items.order_id > orders.id
+Ref: driver_settlements.driver_id > drivers.id
+
+// -- Config & System
+Ref: delivery_fee_configs.zone_id > service_zones.id
+Ref: platform_configs.updated_by > users.id
+Ref: notifications.user_id > users.id
+Ref: admin_audit_logs.admin_id > users.id
+Ref: search_history.user_id > users.id
