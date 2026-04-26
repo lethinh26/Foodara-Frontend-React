@@ -29,6 +29,8 @@ export interface CartItem {
   selectedVariant: { variantId: string; name: string; price: number } | null;
   note: string;
   totalPrice: number;
+  discountedUnitPrice?: number;
+  discountedTotalPrice?: number;
 }
 
 export interface CheckoutPricing {

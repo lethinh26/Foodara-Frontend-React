@@ -1,5 +1,5 @@
-export type VoucherType = 'percentage' | 'fixed' | 'free_shipping';
-export type VoucherScope = 'platform' | 'restaurant';
+export type VoucherType = 'percentage' | 'fixed' | 'free_ship';
+export type VoucherScope = 'platform' | 'store';
 
 export interface Voucher {
   id: string;
@@ -8,9 +8,8 @@ export interface Voucher {
   description: string;
   type: VoucherType;
   scope: VoucherScope;
-  restaurantId: string | null;
-  restaurantName: string | null;
-  discountValue: number; // percentage or fixed amount
+  storeId: string | null;
+  discountValue: number;
   maxDiscount: number;
   minOrderValue: number;
   usageLimit: number;
@@ -21,6 +20,39 @@ export interface Voucher {
   isStackable: boolean;
   isActive: boolean;
   conditions: string[];
+  isCollected: boolean;
+  isUsed: boolean;
+  collectedAt: string | null;
+  potentialDiscount: number;
+}
+
+export interface VoucherPricing {
+  voucherId: string;
+  code: string;
+  voucherType: VoucherScope;
+  discountType: VoucherType;
+  discountValue: number;
+  potentialDiscount: number;
+}
+
+export interface VoucherBestChoice {
+  platformVoucher: VoucherPricing | null;
+  storeVoucher: VoucherPricing | null;
+  totalDiscount: number;
+}
+
+export interface VoucherCartPricing {
+  storeId: string;
+  subtotal: number;
+  totalDiscount: number;
+  subtotalAfterVoucher: number;
+  appliedPlatformVoucher: VoucherPricing | null;
+  appliedStoreVoucher: VoucherPricing | null;
+  bestPlatformVoucher: VoucherPricing | null;
+  bestStoreVoucher: VoucherPricing | null;
+  availableVouchers: Voucher[];
+  canApply: boolean;
+  message: string;
 }
 
 export interface Promotion {

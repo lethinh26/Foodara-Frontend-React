@@ -56,6 +56,12 @@ export interface MenuVariant {
   isAvailable: boolean;
 }
 
+export interface MenuItemPricing {
+  discountedPrice: number;
+  estimatedDiscountAmount: number;
+  bestVoucherCode?: string;
+}
+
 export interface MenuItem {
   id: string;
   restaurantId: string;
@@ -65,6 +71,7 @@ export interface MenuItem {
   image: string;
   basePrice: number;
   originalPrice: number;
+  pricing: MenuItemPricing;
   sizes: Size[];
   toppingGroups: ToppingGroup[];
   variants: MenuVariant[];
