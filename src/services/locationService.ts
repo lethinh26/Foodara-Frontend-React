@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { apiClient } from './apiClient';
 
 // ============================================================
 // Vietnam Provinces API (https://provinces.open-api.vn/api/v1/)
@@ -97,12 +98,10 @@ export const locationService = {
       return { covered: false, cityId: null, cityName: null, zoneId: null, zoneName: null, surgeMultiplier: null };
     }
 
-    const response = await fetch(`${env.apiBaseUrl}/v1/locations/check-coverage?lat=${lat}&lng=${lng}`, {
-      headers: { 'Content-Type': 'application/json' },
+    return apiClient.get<CoverageCheckResponse>('/v1/locations/check-coverage', {
+      lat: String(lat),
+      lng: String(lng),
     });
-    const body = await response.json();
-    if (body.code === 1000) return body.result;
-    throw new Error(body.message || 'Check coverage failed');
   },
 
   /**
@@ -113,12 +112,7 @@ export const locationService = {
       return { latitude: 10.7735, longitude: 106.7022, formattedAddress: address };
     }
 
-    const response = await fetch(`${env.apiBaseUrl}/v1/locations/geocode?address=${encodeURIComponent(address)}`, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const body = await response.json();
-    if (body.code === 1000) return body.result;
-    throw new Error(body.message || 'Geocoding failed');
+    return apiClient.get<GeocodeResponse>('/v1/locations/geocode', { address });
   },
 
   /**
@@ -129,11 +123,9 @@ export const locationService = {
       return { latitude: lat, longitude: lng, formattedAddress: `${lat}, ${lng}` };
     }
 
-    const response = await fetch(`${env.apiBaseUrl}/v1/locations/reverse-geocode?lat=${lat}&lng=${lng}`, {
-      headers: { 'Content-Type': 'application/json' },
+    return apiClient.get<GeocodeResponse>('/v1/locations/reverse-geocode', {
+      lat: String(lat),
+      lng: String(lng),
     });
-    const body = await response.json();
-    if (body.code === 1000) return body.result;
-    throw new Error(body.message || 'Reverse geocoding failed');
   },
 };

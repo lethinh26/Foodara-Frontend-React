@@ -5,7 +5,7 @@ import { Upload as UploadIcon, CheckCircle2, Store, FileText, Building2 } from '
 import { merchantService } from '../../../services/merchantService';
 import { useDispatch } from 'react-redux';
 import { switchRole } from '../../../store/authSlice';
-import type { UploadProps } from 'antd';
+import type { UploadFile, UploadProps } from 'antd';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -30,7 +30,7 @@ const RegisterPage: React.FC = () => {
 
   const handleStoreInfoSubmit = async () => {
     try {
-      const values = await form.validateFields();
+      await form.validateFields();
       setCurrentStep(1);
     } catch {
       // Validation failed
@@ -39,7 +39,7 @@ const RegisterPage: React.FC = () => {
 
   const handleDocumentsSubmit = async () => {
     try {
-      const values = await documentsForm.validateFields();
+      await documentsForm.validateFields();
       setCurrentStep(2);
     } catch {
       // Validation failed
@@ -85,13 +85,13 @@ const RegisterPage: React.FC = () => {
     }
   };
 
-  const documentUploadProps: UploadProps = (type: string) => ({
+  const documentUploadProps = (type: string): UploadProps => ({
     name: 'file',
     multiple: false,
     action: '#',
     accept: '.pdf,.jpg,.jpeg,.png',
-    beforeUpload: async (file) => {
-      const isLt5M = file.size / 1024 / 1024 < 5;
+    beforeUpload: async (file: UploadFile) => {
+      const isLt5M = (file.size ?? 0) / 1024 / 1024 < 5;
       if (!isLt5M) {
         messageApi.error('File phải nhỏ hơn 5MB');
         return false;

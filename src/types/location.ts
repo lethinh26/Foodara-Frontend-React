@@ -7,9 +7,9 @@ export interface Address {
   fullAddress: string;
   street: string;
   ward: string;
-  districtId: string;
+  districtId?: string;
   district: string;
-  cityId: string;
+  cityId?: string;
   city: string;
   coordinates: Coordinates;
   note: string; // delivery instructions
@@ -29,7 +29,7 @@ export interface Region {
 
 export interface City {
   id: string;
-  regionId: string;
+  regionId?: string;
   name: string;
   code: string;
   isActive: boolean;

@@ -120,6 +120,27 @@ interface BackendMenuItemDetailResponse extends BackendMenuItemResponse {
   optionGroups?: BackendOptionGroupResponse[];
 }
 
+interface BackendComboResponse {
+  id: string;
+  storeId?: string;
+  name: string;
+  comboPrice?: number;
+  originalPrice?: number;
+  isActive?: boolean;
+  items?: Array<{
+    menuItemId: string;
+    menuItemName?: string;
+    quantity?: number;
+  }>;
+}
+
+interface BackendOperatingHourResponse {
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  isClosed?: boolean;
+}
+
 interface BackendReviewResponse {
   id: string;
   order_id?: string;
@@ -268,8 +289,8 @@ function mapBackendMenuItemDetail(m: BackendMenuItemDetailResponse, restaurantId
           id: opt.id || '',
           name: opt.name || '',
           price: Number(opt.priceAdjustment || 0),
-          isDefault: opt.isDefault ?? false,
           isAvailable: opt.isAvailable ?? true,
+          maxQuantity: group.maxSelections ?? 1,
         })) || [],
       });
     }
@@ -279,6 +300,30 @@ function mapBackendMenuItemDetail(m: BackendMenuItemDetailResponse, restaurantId
     ...base,
     sizes,
     toppingGroups,
+  };
+}
+
+function mapBackendOperatingHours(hours: BackendOperatingHourResponse[]) {
+  return hours.map(hour => ({
+    day: String(hour.dayOfWeek),
+    open: hour.openTime,
+    close: hour.closeTime,
+    isClosed: hour.isClosed ?? false,
+  }));
+}
+
+function mapBackendCombo(combo: BackendComboResponse) {
+  return {
+    id: String(combo.id || ''),
+    name: String(combo.name || ''),
+    price: Number(combo.comboPrice || 0),
+    originalPrice: Number(combo.originalPrice || combo.comboPrice || 0),
+    isAvailable: combo.isActive ?? true,
+    items: combo.items?.map(item => ({
+      itemId: String(item.menuItemId || ''),
+      itemName: String(item.menuItemName || ''),
+      quantity: item.quantity ?? 1,
+    })) || [],
   };
 }
 
@@ -377,7 +422,14 @@ export const restaurantService = {
     }
     try {
       const s = await apiClient.get<BackendStoreResponse>(`/v1/stores/${id}`);
-      return mapBackendStore(s);
+      const restaurant = mapBackendStore(s);
+      try {
+        const hours = await apiClient.get<BackendOperatingHourResponse[]>(`/v1/stores/${id}/operating-hours`);
+        restaurant.openingHours = mapBackendOperatingHours(hours);
+      } catch {
+        // Opening hours are optional for the detail page.
+      }
+      return restaurant;
     } catch {
       return null;
     }
@@ -415,7 +467,7 @@ export const restaurantService = {
       return mockMenuCategories.filter(c => c.restaurantId === restaurantId);
     }
     try {
-      const items = await apiClient.get<BackendMenuCategoryResponse[]>(`/v1/stores/${restaurantId}/menu-categories`);
+      const items = await apiClient.get<BackendMenuCategoryResponse[]>(`/v1/stores/${restaurantId}/menu`);
       return items.map(c => mapBackendMenuCategory(c, restaurantId));
     } catch (e) {
       console.warn("Failed to fetch menu categories from API, falling back to mock", e);
@@ -431,7 +483,16 @@ export const restaurantService = {
     try {
       // Try to get menu items with option groups first
       const items = await apiClient.get<BackendMenuItemDetailResponse[]>(`/v1/stores/${restaurantId}/menu-items-detail`);
-      return items.map(m => mapBackendMenuItemDetail(m, restaurantId));
+      const menuItems = items.map(m => mapBackendMenuItemDetail(m, restaurantId));
+      try {
+        const combos = await apiClient.get<BackendComboResponse[]>(`/v1/stores/${restaurantId}/combos`);
+        if (menuItems.length > 0) {
+          menuItems[0].comboOptions = combos.map(mapBackendCombo);
+        }
+      } catch {
+        // Combos are optional; keep menu rendering available without them.
+      }
+      return menuItems;
     } catch (e) {
       console.warn("Failed to fetch menu items with options, falling back to basic", e);
       try {

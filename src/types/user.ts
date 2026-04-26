@@ -26,9 +26,15 @@ export interface AdminUser extends User {
 
 export interface SessionDevice {
   id: string;
-  ipAddress: string;
-  createdAt: string;
+  ipAddress?: string;
+  createdAt?: string;
   isCurrent: boolean;
+  deviceName?: string;
+  browser?: string;
+  os?: string;
+  ip?: string;
+  lastActive?: string;
+  location?: string;
 }
 
 export interface Role {

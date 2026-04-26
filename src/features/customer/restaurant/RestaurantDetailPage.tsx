@@ -3,11 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Tag, Typography, Space, Button, Tabs, Rate, Divider, Badge, Spin, Empty, Modal, Input, Radio, Checkbox, message } from 'antd';
 import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
-import { addToCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
+import { addCartItem, fetchCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
 import { addFavorite, removeFavorite, selectIsFavorite } from '../../../store/favoriteSlice';
 import { restaurantService } from '../../../services/restaurantService';
 import { formatVND, formatDistance, formatETA, formatRelativeTime } from '../../../utils/format';
-import { generateId } from '../../../utils/helpers';
 import type { Restaurant } from '../../../types/restaurant';
 import type { MenuItem, MenuCategory } from '../../../types/menu';
 import type { Review } from '../../../types/review';
@@ -32,6 +31,11 @@ const RestaurantDetailPage: React.FC = () => {
   const [selectedSizeId, setSelectedSizeId] = useState<string>('');
   const [selectedToppings, setSelectedToppings] = useState<Record<string, string[]>>({});
   const [itemNote, setItemNote] = useState('');
+  const [addingToCart, setAddingToCart] = useState(false);
+
+  useEffect(() => {
+    void dispatch(fetchCart());
+  }, [dispatch]);
 
   useEffect(() => {
     const load = async () => {
@@ -77,27 +81,63 @@ const RestaurantDetailPage: React.FC = () => {
   };
 
   const handleAddToCart = () => {
-    if (!selectedItem || !restaurant) return;
-    const size = selectedItem.sizes.find(s => s.id === selectedSizeId);
-    const toppings = Object.entries(selectedToppings).flatMap(([groupId, optionIds]) => {
-      const group = selectedItem.toppingGroups.find(g => g.id === groupId);
-      return optionIds.map(optId => {
-        const opt = group?.options.find(o => o.id === optId);
-        return { groupId, optionId: optId, quantity: 1, name: opt?.name || '', price: opt?.price || 0 };
+    const submit = async () => {
+      if (!selectedItem || !restaurant) return;
+
+      for (const group of selectedItem.toppingGroups) {
+        const selectedIds = selectedToppings[group.id] ?? [];
+        const minRequired = group.required ? Math.max(group.minSelect, 1) : group.minSelect;
+        if (selectedIds.length < minRequired) {
+          message.error(`Vui lòng chọn tối thiểu ${minRequired} tùy chọn cho "${group.name}"`);
+          return;
+        }
+        if (selectedIds.length > group.maxSelect) {
+          message.error(`Bạn chỉ có thể chọn tối đa ${group.maxSelect} tùy chọn cho "${group.name}"`);
+          return;
+        }
+      }
+
+      const size = selectedItem.sizes.find(s => s.id === selectedSizeId);
+      const toppings = Object.entries(selectedToppings).flatMap(([groupId, optionIds]) => {
+        const group = selectedItem.toppingGroups.find(g => g.id === groupId);
+        return optionIds.map(optId => {
+          const opt = group?.options.find(o => o.id === optId);
+          return { groupId, optionId: optId, quantity: 1, name: opt?.name || '', price: opt?.price || 0 };
+        });
       });
-    });
-    dispatch(addToCart({
-      item: {
-        id: generateId(), menuItemId: selectedItem.id, restaurantId: restaurant.id,
-        name: selectedItem.name, image: selectedItem.image, basePrice: selectedItem.basePrice,
-        quantity: itemQty,
-        selectedSize: size ? { sizeId: size.id, name: size.name, priceAdjustment: size.priceAdjustment } : null,
-        selectedToppings: toppings, selectedVariant: null, note: itemNote, totalPrice: getItemPrice(),
-      },
-      restaurantId: restaurant.id, restaurantName: restaurant.name,
-    }));
-    message.success(`Đã thêm ${selectedItem.name} vào giỏ`);
-    setSelectedItem(null);
+      const optionItemIds = [
+        ...(size ? [size.id] : []),
+        ...toppings.map(topping => topping.optionId),
+      ];
+
+      setAddingToCart(true);
+      try {
+        await dispatch(addCartItem({
+          storeId: restaurant.id,
+          storeName: restaurant.name,
+          menuItemId: selectedItem.id,
+          quantity: itemQty,
+          optionItemIds,
+          specialInstructions: itemNote,
+          itemPreview: {
+            name: selectedItem.name,
+            image: selectedItem.image,
+            basePrice: selectedItem.basePrice,
+            selectedSize: size ? { sizeId: size.id, name: size.name, priceAdjustment: size.priceAdjustment } : null,
+            selectedToppings: toppings,
+          },
+        })).unwrap();
+        message.success(`Đã thêm ${selectedItem.name} vào giỏ`);
+        setSelectedItem(null);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Không thể thêm món vào giỏ hàng.';
+        message.error(errorMessage);
+      } finally {
+        setAddingToCart(false);
+      }
+    };
+
+    void submit();
   };
 
   const toggleFavorite = () => {
@@ -105,7 +145,17 @@ const RestaurantDetailPage: React.FC = () => {
     if (isFav) {
       dispatch(removeFavorite({ targetId: restaurant.id, type: 'restaurant' }));
     } else {
-      dispatch(addFavorite({ id: generateId(), userId: '', type: 'restaurant', targetId: restaurant.id, targetName: restaurant.name, targetImage: restaurant.coverImage, restaurantId: restaurant.id, restaurantName: restaurant.name, addedAt: new Date().toISOString() }));
+      dispatch(addFavorite({
+        id: `fav-${Date.now()}`,
+        userId: '',
+        type: 'restaurant',
+        targetId: restaurant.id,
+        targetName: restaurant.name,
+        targetImage: restaurant.coverImage,
+        restaurantId: restaurant.id,
+        restaurantName: restaurant.name,
+        addedAt: new Date().toISOString(),
+      }));
     }
   };
 
@@ -289,7 +339,13 @@ const RestaurantDetailPage: React.FC = () => {
                 <Text strong style={{ fontSize: 16, minWidth: 24, textAlign: 'center' }}>{itemQty}</Text>
                 <Button shape="circle" icon={<Plus size={16} />} onClick={() => setItemQty(Math.min(selectedItem.maxQuantity, itemQty + 1))} disabled={itemQty >= selectedItem.maxQuantity} />
               </div>
-              <Button type="primary" size="large" onClick={handleAddToCart} style={{ borderRadius: 10, fontWeight: 600, minWidth: 180 }}>
+              <Button
+                type="primary"
+                size="large"
+                onClick={handleAddToCart}
+                loading={addingToCart}
+                style={{ borderRadius: 10, fontWeight: 600, minWidth: 180 }}
+              >
                 Thêm - {formatVND(getItemPrice())}
               </Button>
             </div>

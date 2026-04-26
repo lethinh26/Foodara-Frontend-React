@@ -3,7 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Button, Typography, Divider, Radio, Empty, message, Select, Input, Space, Tag, Modal } from 'antd';
 import { Trash2, Plus, Minus, MapPin, Ticket, CreditCard, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '../../../hooks/useStore';
-import { selectCartItems, selectCartRestaurant, updateQuantity, removeFromCart, clearCart } from '../../../store/cartSlice';
+import {
+  clearCart,
+  fetchCart,
+  removeCartItem,
+  selectCartError,
+  selectCartItems,
+  selectCartLoading,
+  selectCartMinOrderAmount,
+  selectCartRestaurant,
+  selectCartStoreOpen,
+  selectCartTotal,
+  selectCartValidation,
+  updateCartItem,
+  validateCart,
+} from '../../../store/cartSlice';
 import { orderService } from '../../../services/orderService';
 import { paymentService } from '../../../services/paymentService';
 import { formatVND } from '../../../utils/format';
@@ -18,6 +32,12 @@ const CheckoutPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector(selectCartItems);
   const restaurant = useAppSelector(selectCartRestaurant);
+  const cartTotal = useAppSelector(selectCartTotal);
+  const cartLoading = useAppSelector(selectCartLoading);
+  const cartValidation = useAppSelector(selectCartValidation);
+  const cartError = useAppSelector(selectCartError);
+  const minOrderAmount = useAppSelector(selectCartMinOrderAmount);
+  const isStoreOpen = useAppSelector(selectCartStoreOpen);
   const [selectedAddress, setSelectedAddress] = useState(mockAddresses[0]?.id || '');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [selectedPayment, setSelectedPayment] = useState('pm-1');
@@ -28,9 +48,17 @@ const CheckoutPage: React.FC = () => {
   const [note, setNote] = useState('');
 
   useEffect(() => {
+    void dispatch(fetchCart());
+    void dispatch(validateCart());
     paymentService.getPaymentMethods().then(setPaymentMethods);
     orderService.getVouchers().then(setVouchers);
-  }, []);
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (cartError) {
+      message.error(cartError);
+    }
+  }, [cartError]);
 
   if (cartItems.length === 0) {
     return (
@@ -41,7 +69,7 @@ const CheckoutPage: React.FC = () => {
     );
   }
 
-  const subtotal = cartItems.reduce((s, i) => s + i.totalPrice, 0);
+  const subtotal = cartTotal || cartItems.reduce((s, i) => s + i.totalPrice, 0);
   const deliveryFee = 15000;
   const platformFee = Math.min(Math.max(subtotal * 0.03, 2000), 10000);
   const appliedVouchers = vouchers.filter(v => selectedVouchers.includes(v.id));
@@ -56,17 +84,25 @@ const CheckoutPage: React.FC = () => {
   const handleOrder = async () => {
     setLoading(true);
     try {
+      const latestValidation = await dispatch(validateCart()).unwrap();
+      if (!latestValidation.valid) {
+        const firstIssue = latestValidation.issues[0];
+        message.error(firstIssue?.message || 'Giỏ hàng không hợp lệ, vui lòng kiểm tra lại.');
+        return;
+      }
+
       const addr = mockAddresses.find(a => a.id === selectedAddress) || mockAddresses[0];
       await orderService.createOrder({
         customerId: 'user-001', restaurantId: restaurant.id || '', restaurantName: restaurant.name || '',
         items: cartItems, deliveryAddress: addr, paymentMethod: selectedPayment, note,
         pricing: { subtotal, deliveryFee, platformFee, discount: 0, voucherDiscount, total, appliedVoucherIds: selectedVouchers, breakdown: [] },
       });
-      dispatch(clearCart());
+      await dispatch(clearCart()).unwrap();
       message.success('Đặt hàng thành công!');
       navigate('/customer/order/ord-001');
-    } catch {
-      message.error('Đặt hàng thất bại. Vui lòng thử lại.');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Đặt hàng thất bại. Vui lòng thử lại.';
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -95,16 +131,46 @@ const CheckoutPage: React.FC = () => {
               {item.note && <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>📝 {item.note}</Text>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Button size="small" icon={<Minus size={12} />} onClick={() => item.quantity > 1 ? dispatch(updateQuantity({ id: item.id, quantity: item.quantity - 1 })) : dispatch(removeFromCart(item.id))} />
+              <Button
+                size="small"
+                icon={<Minus size={12} />}
+                onClick={() => {
+                  if (item.quantity > 1) {
+                    void dispatch(updateCartItem({ cartItemId: item.id, quantity: item.quantity - 1 }));
+                  } else {
+                    void dispatch(removeCartItem(item.id));
+                  }
+                }}
+              />
               <Text strong>{item.quantity}</Text>
-              <Button size="small" icon={<Plus size={12} />} onClick={() => dispatch(updateQuantity({ id: item.id, quantity: item.quantity + 1 }))} />
+              <Button
+                size="small"
+                icon={<Plus size={12} />}
+                onClick={() => void dispatch(updateCartItem({ cartItemId: item.id, quantity: item.quantity + 1 }))}
+              />
               <Text strong style={{ minWidth: 80, textAlign: 'right' }}>{formatVND(item.totalPrice)}</Text>
-              <Button type="text" danger icon={<Trash2 size={14} />} onClick={() => dispatch(removeFromCart(item.id))} />
+              <Button type="text" danger icon={<Trash2 size={14} />} onClick={() => void dispatch(removeCartItem(item.id))} />
             </div>
           </div>
         ))}
         <Input.TextArea value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú cho đơn hàng..." rows={2} style={{ marginTop: 12 }} />
       </Card>
+
+      {(minOrderAmount > 0 || !isStoreOpen || (cartValidation && !cartValidation.valid)) && (
+        <Card style={{ marginBottom: 16, borderRadius: 12, borderColor: 'var(--warning)' }}>
+          {!isStoreOpen && <Text style={{ display: 'block', color: 'var(--danger)' }}>Cửa hàng hiện đang đóng cửa.</Text>}
+          {minOrderAmount > 0 && subtotal < minOrderAmount && (
+            <Text style={{ display: 'block', color: 'var(--danger)' }}>
+              Đơn hàng chưa đạt tối thiểu {formatVND(minOrderAmount)}.
+            </Text>
+          )}
+          {cartValidation?.issues.map(issue => (
+            <Text key={`${issue.code}-${issue.cartItemId ?? 'cart'}`} style={{ display: 'block', color: 'var(--danger)' }}>
+              {issue.message}
+            </Text>
+          ))}
+        </Card>
+      )}
 
       {/* Voucher */}
       <Card style={{ marginBottom: 16, borderRadius: 12, cursor: 'pointer' }} onClick={() => setVoucherModal(true)}>
@@ -139,7 +205,15 @@ const CheckoutPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong style={{ fontSize: 16 }}>Tổng cộng</Text><Text strong style={{ fontSize: 18, color: 'var(--primary)' }}>{formatVND(total)}</Text></div>
       </Card>
 
-      <Button type="primary" block size="large" loading={loading} onClick={handleOrder} style={{ height: 52, borderRadius: 12, fontWeight: 700, fontSize: 16 }}>
+      <Button
+        type="primary"
+        block
+        size="large"
+        loading={loading || cartLoading}
+        onClick={handleOrder}
+        disabled={!isStoreOpen || (minOrderAmount > 0 && subtotal < minOrderAmount)}
+        style={{ height: 52, borderRadius: 12, fontWeight: 700, fontSize: 16 }}
+      >
         Đặt hàng - {formatVND(total)}
       </Button>
 

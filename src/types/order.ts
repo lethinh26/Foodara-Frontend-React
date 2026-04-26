@@ -13,7 +13,8 @@ export type OrderStatus =
   | 'delivered'
   | 'completed'
   | 'cancelled'
-  | 'failed';
+  | 'failed'
+  | 'refunded';
 
 export interface CartItem {
   id: string; // unique cart item ID
