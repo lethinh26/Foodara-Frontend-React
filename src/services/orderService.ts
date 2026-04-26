@@ -54,7 +54,7 @@ export const orderService = {
     vouchers.forEach(v => {
       if (v.type === 'percentage') voucherDiscount += Math.min(subtotal * v.discountValue / 100, v.maxDiscount);
       else if (v.type === 'fixed') voucherDiscount += v.discountValue;
-      else if (v.type === 'free_shipping') voucherDiscount += Math.min(deliveryFee, v.maxDiscount);
+      else if (v.type === 'free_ship') voucherDiscount += Math.min(deliveryFee, v.maxDiscount);
     });
     const total = subtotal + deliveryFee + platformFee - voucherDiscount;
     return {

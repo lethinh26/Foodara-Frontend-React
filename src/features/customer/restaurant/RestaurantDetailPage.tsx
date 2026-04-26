@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Tag, Typography, Space, Button, Tabs, Rate, Divider, Badge, Spin, Empty, Modal, Input, Radio, Checkbox, message } from 'antd';
-import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft } from 'lucide-react';
+import { Card, Tag, Typography, Space, Button, Tabs, Rate, Divider, Badge, Spin, Empty, Modal, Input, Radio, Checkbox, message, Tooltip } from 'antd';
+import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft, Ticket } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
 import { addCartItem, fetchCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
 import { addFavorite, removeFavorite, selectIsFavorite } from '../../../store/favoriteSlice';
 import { restaurantService } from '../../../services/restaurantService';
+import { voucherService } from '../../../services/voucherService';
 import { formatVND, formatDistance, formatETA, formatRelativeTime } from '../../../utils/format';
 import type { Restaurant } from '../../../types/restaurant';
 import type { MenuItem, MenuCategory } from '../../../types/menu';
 import type { Review } from '../../../types/review';
+import type { Voucher } from '../../../types/promotion';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -25,6 +27,10 @@ const RestaurantDetailPage: React.FC = () => {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [storeVouchers, setStoreVouchers] = useState<Voucher[]>([]);
+  const [voucherModalOpen, setVoucherModalOpen] = useState(false);
+  const [voucherDetail, setVoucherDetail] = useState<Voucher | null>(null);
+  const [collectingVoucherId, setCollectingVoucherId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [itemQty, setItemQty] = useState(1);
@@ -40,19 +46,25 @@ const RestaurantDetailPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       if (!id) return;
-      const [rest, cats, items, revs] = await Promise.all([
-        restaurantService.getRestaurantById(id),
-        restaurantService.getMenuCategories(id),
-        restaurantService.getMenuItems(id),
-        restaurantService.getReviews(id),
-      ]);
-      setRestaurant(rest);
-      setCategories(cats);
-      setMenuItems(items);
-      setReviews(revs);
-      setLoading(false);
+      setLoading(true);
+      try {
+        const [rest, cats, items, revs, vouchers] = await Promise.all([
+          restaurantService.getRestaurantById(id),
+          restaurantService.getMenuCategories(id),
+          restaurantService.getMenuItems(id),
+          restaurantService.getReviews(id),
+          voucherService.getStoreVouchers(id),
+        ]);
+        setRestaurant(rest);
+        setCategories(cats);
+        setMenuItems(items);
+        setReviews(revs);
+        setStoreVouchers(vouchers);
+      } finally {
+        setLoading(false);
+      }
     };
-    load();
+    void load();
   }, [id]);
 
   const openItemModal = (item: MenuItem) => {
@@ -80,6 +92,19 @@ const RestaurantDetailPage: React.FC = () => {
     return price * itemQty;
   };
 
+  const handleCollectVoucher = async (voucher: Voucher) => {
+    try {
+      setCollectingVoucherId(voucher.id);
+      const collected = await voucherService.collectVoucher(voucher.id);
+      setStoreVouchers(prev => prev.map(v => (v.id === voucher.id ? { ...v, ...collected, isCollected: true } : v)));
+      message.success(`Đã thu thập voucher ${voucher.code}`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Không thể thu thập voucher. Vui lòng thử lại.');
+    } finally {
+      setCollectingVoucherId(null);
+    }
+  };
+
   const handleAddToCart = () => {
     const submit = async () => {
       if (!selectedItem || !restaurant) return;
@@ -88,7 +113,7 @@ const RestaurantDetailPage: React.FC = () => {
         const selectedIds = selectedToppings[group.id] ?? [];
         const minRequired = group.required ? Math.max(group.minSelect, 1) : group.minSelect;
         if (selectedIds.length < minRequired) {
-          message.error(`Vui lòng chọn tối thiểu ${minRequired} tùy chọn cho "${group.name}"`);
+          message.error(`Vui lòng chọn ít nhất ${minRequired} tùy chọn cho "${group.name}"`);
           return;
         }
         if (selectedIds.length > group.maxSelect) {
@@ -159,15 +184,14 @@ const RestaurantDetailPage: React.FC = () => {
     }
   };
 
+  const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.totalPrice, 0), [cartItems]);
+  const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.quantity, 0), [cartItems]);
+
   if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
   if (!restaurant) return <Empty description="Không tìm thấy quán ăn" />;
 
-  const cartTotal = cartItems.reduce((s, i) => s + i.totalPrice, 0);
-  const cartCount = cartItems.reduce((s, i) => s + i.quantity, 0);
-
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 100px' }} className="animate-fade-in">
-      {/* Hero */}
       <div style={{ position: 'relative', height: 240, borderRadius: '0 0 16px 16px', overflow: 'hidden', marginBottom: 24 }}>
         <img src={restaurant.coverImage} alt={restaurant.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} />
@@ -184,7 +208,51 @@ const RestaurantDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Info + Menu */}
+      <Card style={{ marginBottom: 20, borderRadius: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Space>
+            <Ticket size={18} color="var(--primary)" />
+            <Text strong>Voucher của quán ({storeVouchers.length})</Text>
+          </Space>
+          <Button onClick={() => setVoucherModalOpen(true)}>Xem tất cả voucher</Button>
+        </div>
+        {storeVouchers.length === 0 ? (
+          <Text type="secondary" style={{ marginTop: 12, display: 'block' }}>Quán này chưa có voucher khả dụng.</Text>
+        ) : (
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+            {storeVouchers.slice(0, 3).map(voucher => (
+              <Card key={voucher.id} size="small" style={{ borderRadius: 10, borderLeft: `4px solid ${voucher.scope === 'platform' ? 'var(--primary)' : 'var(--secondary)'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start'}}>
+                  <div>
+                    <Text strong>{voucher.title}</Text>
+                    <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{voucher.conditions.join(' • ')}</Text>
+                    {voucher.potentialDiscount > 0 && (
+                      <Text style={{ display: 'block', color: 'var(--success)', fontSize: 12 }}>
+                        Ước tính tiết kiệm: {formatVND(voucher.potentialDiscount)}
+                      </Text>
+                    )}
+                  </div>
+                  {voucher.isCollected ? <Tag color="green">Đã thu thập</Tag> : <Tag color="gold">Chưa thu thập</Tag>}
+                </div>
+                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+                  <Button size="small" onClick={() => setVoucherDetail(voucher)}>Chi tiết</Button>
+                  {voucher.isCollected ?? (
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={collectingVoucherId === voucher.id}
+                      onClick={() => void handleCollectVoucher(voucher)}
+                    >
+                      Thu thập
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <Tabs defaultActiveKey="menu" items={[
         {
           key: 'menu', label: 'Thực đơn',
@@ -208,11 +276,25 @@ const RestaurantDetailPage: React.FC = () => {
                                   {item.isBestSeller && <Tag color="orange" style={{ marginLeft: 8 }}>Bán chạy</Tag>}
                                   {item.isNew && <Tag color="green" style={{ marginLeft: 4 }}>Mới</Tag>}
                                   {!item.isAvailable && <Tag color="red" style={{ marginLeft: 4 }}>Hết hàng</Tag>}
+                                  {item.pricing.bestVoucherCode && (
+                                    <Tooltip title={`Voucher tốt nhất: ${item.pricing.bestVoucherCode}`}>
+                                      <Tag color="blue" style={{ marginLeft: 4 }}>{item.pricing.bestVoucherCode}</Tag>
+                                    </Tooltip>
+                                  )}
                                 </div>
                               </div>
                               <Paragraph type="secondary" style={{ fontSize: 12, margin: '4px 0' }} ellipsis={{ rows: 2 }}>{item.description}</Paragraph>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text strong style={{ color: 'var(--primary)', fontSize: 15 }}>{formatVND(item.basePrice)}</Text>
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  {item.pricing.estimatedDiscountAmount > 0 ? (
+                                    <>
+                                      <Text delete type="secondary" style={{ fontSize: 12 }}>{formatVND(item.basePrice)}</Text>
+                                      <Text strong style={{ color: 'var(--success)', fontSize: 16 }}>{formatVND(item.pricing.discountedPrice)}</Text>
+                                    </>
+                                  ) : (
+                                    <Text strong style={{ color: 'var(--primary)', fontSize: 15 }}>{formatVND(item.basePrice)}</Text>
+                                  )}
+                                </div>
                                 {item.isAvailable && <Button type="primary" size="small" shape="circle" icon={<Plus size={14} />} />}
                               </div>
                             </div>
@@ -271,7 +353,6 @@ const RestaurantDetailPage: React.FC = () => {
         },
       ]} />
 
-      {/* Cart bar */}
       {cartCount > 0 && cartRestaurant.id === restaurant.id && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100, boxShadow: 'var(--shadow-lg)' }}>
           <div><Badge count={cartCount}><ShoppingCart size={24} color="var(--primary)" /></Badge><Text strong style={{ marginLeft: 12 }}>{formatVND(cartTotal)}</Text></div>
@@ -279,7 +360,6 @@ const RestaurantDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* Item Modal */}
       <Modal open={!!selectedItem} onCancel={() => setSelectedItem(null)} footer={null} width={520} title={selectedItem?.name} centered>
         {selectedItem && (
           <div>
@@ -288,7 +368,7 @@ const RestaurantDetailPage: React.FC = () => {
 
             {selectedItem.sizes.length > 0 && (
               <div style={{ marginBottom: 16 }}>
-                <Text strong>Chọn size:</Text>
+                <Text strong>Chon size:</Text>
                 <Radio.Group value={selectedSizeId} onChange={e => setSelectedSizeId(e.target.value)} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                   {selectedItem.sizes.map(s => (
                     <Radio key={s.id} value={s.id}>
@@ -301,7 +381,7 @@ const RestaurantDetailPage: React.FC = () => {
 
             {selectedItem.toppingGroups.map(group => (
               <div key={group.id} style={{ marginBottom: 16 }}>
-                <Text strong>{group.name}</Text>{group.required && <Tag color="red" style={{ marginLeft: 8 }}>Bắt buộc</Tag>}
+                <Text strong>{group.name}</Text>{group.required && <Tag color="red" style={{ marginLeft: 8 }}>Bat buoc</Tag>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                   {group.maxSelect === 1 ? (
                     <Radio.Group value={selectedToppings[group.id]?.[0]} onChange={e => setSelectedToppings(prev => ({ ...prev, [group.id]: [e.target.value] }))}>
@@ -316,7 +396,7 @@ const RestaurantDetailPage: React.FC = () => {
                       <Checkbox key={opt.id} checked={selectedToppings[group.id]?.includes(opt.id)} onChange={e => {
                         setSelectedToppings(prev => {
                           const current = prev[group.id] || [];
-                          return { ...prev, [group.id]: e.target.checked ? [...current, opt.id] : current.filter(id => id !== opt.id) };
+                          return { ...prev, [group.id]: e.target.checked ? [...current, opt.id] : current.filter(x => x !== opt.id) };
                         });
                       }}>
                         {opt.name} {opt.price > 0 && <Text type="secondary">(+{formatVND(opt.price)})</Text>}
@@ -344,12 +424,87 @@ const RestaurantDetailPage: React.FC = () => {
                 size="large"
                 onClick={handleAddToCart}
                 loading={addingToCart}
-                style={{ borderRadius: 10, fontWeight: 600, minWidth: 180 }}
+                style={{ borderRadius: 10, fontWeight: 600, minWidth: 220 }}
               >
                 Thêm - {formatVND(getItemPrice())}
               </Button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={voucherModalOpen}
+        onCancel={() => setVoucherModalOpen(false)}
+        footer={<Button type="primary" onClick={() => setVoucherModalOpen(false)}>Đóng</Button>}
+        title="Voucher có thể thu thập"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {storeVouchers.map(voucher => (
+            <Card key={voucher.id} size="small" style={{ borderRadius: 10 }}>
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+    }}
+  >
+    <div style={{ flex: 1 }}>
+      <Text strong>{voucher.title}</Text>
+      <Text style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 12 }}>
+        {voucher.code}
+      </Text>
+      <Text style={{ display: 'block', fontSize: 12 }}>
+        {voucher.description}
+      </Text>
+    </div>
+
+    <div
+      style={{
+        marginTop: 12,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
+      <Button size="small" onClick={() => setVoucherDetail(voucher)}>
+        Chi tiết
+      </Button>
+
+      <Button
+        size="small"
+        type="primary"
+        disabled={voucher.isCollected}
+        loading={collectingVoucherId === voucher.id}
+        onClick={() => void handleCollectVoucher(voucher)}
+        // style={{ color: "#" }}
+      >
+        {voucher.isCollected ? 'Đã thu thập' : 'Thu thập'}
+      </Button>
+    </div>
+  </div>
+</Card>
+          ))}
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!voucherDetail}
+        onCancel={() => setVoucherDetail(null)}
+        footer={<Button type="primary" onClick={() => setVoucherDetail(null)}>Đã hiểu</Button>}
+        title={voucherDetail?.title || 'Chi tiết voucher'}
+      >
+        {voucherDetail && (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Text><Text strong>Mã:</Text> {voucherDetail.code}</Text>
+            <Text><Text strong>Loại:</Text> {voucherDetail.scope === 'platform' ? 'Voucher sàn' : 'Voucher quán'}</Text>
+            <Text><Text strong>Điều kiện:</Text> {voucherDetail.conditions.join(' • ')}</Text>
+            <Text><Text strong>Đơn tối thiểu:</Text> {formatVND(voucherDetail.minOrderValue)}</Text>
+            <Text><Text strong>Giá trị ưu đãi tối đa:</Text> {voucherDetail.type === 'percentage' ? `${voucherDetail.discountValue}%` : formatVND(voucherDetail.discountValue)}</Text>
+            {voucherDetail.potentialDiscount > 0 && (
+              <Text style={{ color: 'var(--success)' }}><Text strong>Ước tính tiết kiệm:</Text> {formatVND(voucherDetail.potentialDiscount)}</Text>
+            )}
+          </Space>
         )}
       </Modal>
     </div>

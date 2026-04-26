@@ -10,6 +10,8 @@ import type { RootState } from './index';
 import { cartService } from '../services/cartService';
 import { ApiError } from '../services/apiClient';
 
+import type { VoucherPricing } from '../types/promotion';
+
 interface CartState {
   id: string | null;
   items: CartItem[];
@@ -18,6 +20,10 @@ interface CartState {
   storeMinOrderAmount: number;
   isStoreOpen: boolean;
   subtotal: number;
+  subtotalAfterVoucher: number;
+  totalVoucherDiscount: number;
+  bestPlatformVoucher: VoucherPricing | null;
+  bestStoreVoucher: VoucherPricing | null;
   totalItems: number;
   updatedAt: string | null;
   loading: boolean;
@@ -34,6 +40,10 @@ const initialState: CartState = {
   storeMinOrderAmount: 0,
   isStoreOpen: false,
   subtotal: 0,
+  subtotalAfterVoucher: 0,
+  totalVoucherDiscount: 0,
+  bestPlatformVoucher: null,
+  bestStoreVoucher: null,
   totalItems: 0,
   updatedAt: null,
   loading: false,
@@ -60,6 +70,10 @@ const applySnapshot = (state: CartState, snapshot: CartSnapshot): void => {
   state.storeMinOrderAmount = snapshot.storeMinOrderAmount;
   state.isStoreOpen = snapshot.isStoreOpen;
   state.subtotal = snapshot.subtotal;
+  state.subtotalAfterVoucher = snapshot.subtotalAfterVoucher;
+  state.totalVoucherDiscount = snapshot.totalVoucherDiscount;
+  state.bestPlatformVoucher = snapshot.bestPlatformVoucher;
+  state.bestStoreVoucher = snapshot.bestStoreVoucher;
   state.totalItems = snapshot.totalItems;
   state.updatedAt = snapshot.updatedAt;
 };
@@ -224,6 +238,10 @@ export const selectCartRestaurant = createSelector(
   (id, name) => ({ id, name })
 );
 export const selectCartTotal = (state: RootState) => state.cart.subtotal;
+export const selectCartSubtotalAfterVoucher = (state: RootState) => state.cart.subtotalAfterVoucher;
+export const selectCartVoucherDiscount = (state: RootState) => state.cart.totalVoucherDiscount;
+export const selectCartBestPlatformVoucher = (state: RootState) => state.cart.bestPlatformVoucher;
+export const selectCartBestStoreVoucher = (state: RootState) => state.cart.bestStoreVoucher;
 export const selectCartCount = (state: RootState) => state.cart.totalItems;
 export const selectCartValidation = (state: RootState) => state.cart.validation;
 export const selectCartLoading = (state: RootState) => state.cart.loading;

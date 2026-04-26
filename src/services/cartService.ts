@@ -9,6 +9,7 @@ import type {
   CartValidationResult,
   UpdateCartItemPayload,
 } from '../types/cart';
+import type { VoucherPricing } from '../types/promotion';
 
 interface BackendCartItemOptionResponse {
   id: string;
@@ -29,8 +30,19 @@ interface BackendCartItemResponse {
   quantity?: number;
   unitPrice?: number;
   totalPrice?: number;
+  discountedUnitPrice?: number;
+  discountedTotalPrice?: number;
   specialInstructions?: string | null;
   options?: BackendCartItemOptionResponse[];
+}
+
+interface BackendCartVoucherPricing {
+  voucherId?: string;
+  code?: string;
+  voucherType?: string;
+  discountType?: string;
+  discountValue?: number;
+  potentialDiscount?: number;
 }
 
 interface BackendCartResponse {
@@ -41,6 +53,10 @@ interface BackendCartResponse {
   isStoreOpen?: boolean;
   totalItems?: number;
   subtotal?: number;
+  subtotalAfterVoucher?: number;
+  totalVoucherDiscount?: number;
+  bestPlatformVoucher?: BackendCartVoucherPricing | null;
+  bestStoreVoucher?: BackendCartVoucherPricing | null;
   updatedAt?: string | null;
   items?: BackendCartItemResponse[];
 }
@@ -65,6 +81,10 @@ const createEmptySnapshot = (): CartSnapshot => ({
   isStoreOpen: false,
   totalItems: 0,
   subtotal: 0,
+  subtotalAfterVoucher: 0,
+  totalVoucherDiscount: 0,
+  bestPlatformVoucher: null,
+  bestStoreVoucher: null,
   updatedAt: null,
   items: [],
 });
@@ -76,6 +96,24 @@ const toNumber = (value: unknown, fallback = 0): number => {
     return value;
   }
   return fallback;
+};
+
+const mapVoucherPricing = (value?: BackendCartVoucherPricing | null): VoucherPricing | null => {
+  if (!value || !value.voucherId) {
+    return null;
+  }
+  return {
+    voucherId: value.voucherId,
+    code: value.code || '',
+    voucherType: value.voucherType === 'store' ? 'store' : 'platform',
+    discountType: value.discountType === 'fixed'
+      ? 'fixed'
+      : value.discountType === 'free_ship' || value.discountType === 'free_shipping'
+        ? 'free_ship'
+        : 'percentage',
+    discountValue: toNumber(value.discountValue),
+    potentialDiscount: toNumber(value.potentialDiscount),
+  };
 };
 
 const deriveBasePrice = (unitPrice: number, options: BackendCartItemOptionResponse[]): number => {
@@ -95,7 +133,7 @@ const mapBackendCartItem = (item: BackendCartItemResponse, storeId: string): Car
     id: item.id,
     menuItemId: item.menuItemId ?? '',
     restaurantId: storeId,
-    name: item.name ?? 'Món ăn',
+    name: item.name ?? 'Mon an',
     image: item.imageUrl ?? '',
     basePrice: deriveBasePrice(unitPrice, options),
     quantity,
@@ -116,6 +154,8 @@ const mapBackendCartItem = (item: BackendCartItemResponse, storeId: string): Car
     selectedVariant: null,
     note: item.specialInstructions ?? '',
     totalPrice,
+    discountedUnitPrice: toNumber(item.discountedUnitPrice, unitPrice),
+    discountedTotalPrice: toNumber(item.discountedTotalPrice, totalPrice),
   };
 };
 
@@ -133,6 +173,10 @@ const mapBackendCart = (cart: BackendCartResponse): CartSnapshot => {
     isStoreOpen: Boolean(cart.isStoreOpen),
     totalItems: toNumber(cart.totalItems, totalItems),
     subtotal: toNumber(cart.subtotal, subtotal),
+    subtotalAfterVoucher: toNumber(cart.subtotalAfterVoucher, subtotal),
+    totalVoucherDiscount: toNumber(cart.totalVoucherDiscount),
+    bestPlatformVoucher: mapVoucherPricing(cart.bestPlatformVoucher),
+    bestStoreVoucher: mapVoucherPricing(cart.bestStoreVoucher),
     updatedAt: cart.updatedAt ?? null,
     items,
   };
@@ -141,7 +185,7 @@ const mapBackendCart = (cart: BackendCartResponse): CartSnapshot => {
 const mapValidation = (validation: BackendCartValidationResponse): CartValidationResult => {
   const issues: CartValidationIssue[] = (validation.issues ?? []).map(issue => ({
     code: issue.code ?? 'UNKNOWN',
-    message: issue.message ?? 'Giỏ hàng không hợp lệ',
+    message: issue.message ?? 'Gio hang khong hop le',
     cartItemId: issue.cartItemId ?? null,
   }));
 
@@ -157,6 +201,10 @@ const mapValidation = (validation: BackendCartValidationResponse): CartValidatio
 const refreshMockSummary = (): void => {
   mockSnapshot.totalItems = mockSnapshot.items.reduce((sum, item) => sum + item.quantity, 0);
   mockSnapshot.subtotal = mockSnapshot.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  mockSnapshot.subtotalAfterVoucher = mockSnapshot.subtotal;
+  mockSnapshot.totalVoucherDiscount = 0;
+  mockSnapshot.bestPlatformVoucher = null;
+  mockSnapshot.bestStoreVoucher = null;
   mockSnapshot.updatedAt = new Date().toISOString();
   if (mockSnapshot.items.length === 0) {
     mockSnapshot = createEmptySnapshot();
@@ -193,7 +241,7 @@ export const cartService = {
         id: generateId(),
         menuItemId: payload.menuItemId ?? '',
         restaurantId: payload.storeId,
-        name: payload.itemPreview?.name ?? 'Món ăn',
+        name: payload.itemPreview?.name ?? 'Mon an',
         image: payload.itemPreview?.image ?? '',
         basePrice: payload.itemPreview?.basePrice ?? 0,
         quantity: payload.quantity,
@@ -202,6 +250,8 @@ export const cartService = {
         selectedVariant: null,
         note: payload.specialInstructions ?? '',
         totalPrice: unitPrice * payload.quantity,
+        discountedUnitPrice: unitPrice,
+        discountedTotalPrice: unitPrice * payload.quantity,
       };
 
       mockSnapshot.id = mockSnapshot.id ?? generateId();
@@ -235,6 +285,8 @@ export const cartService = {
       const unitPrice = item.quantity > 0 ? item.totalPrice / item.quantity : 0;
       item.quantity = payload.quantity;
       item.totalPrice = unitPrice * payload.quantity;
+      item.discountedUnitPrice = unitPrice;
+      item.discountedTotalPrice = item.totalPrice;
       if (payload.specialInstructions !== undefined) {
         item.note = payload.specialInstructions;
       }
@@ -283,7 +335,7 @@ export const cartService = {
           subtotal: 0,
           minOrderAmount: 0,
           shortfallAmount: 0,
-          issues: [{ code: 'EMPTY_CART', message: 'Giỏ hàng đang trống', cartItemId: null }],
+          issues: [{ code: 'EMPTY_CART', message: 'Gio hang dang trong', cartItemId: null }],
         };
       }
       const shortfallAmount = Math.max(mockSnapshot.storeMinOrderAmount - mockSnapshot.subtotal, 0);
@@ -293,7 +345,7 @@ export const cartService = {
         minOrderAmount: mockSnapshot.storeMinOrderAmount,
         shortfallAmount,
         issues: shortfallAmount > 0
-          ? [{ code: 'MIN_ORDER_NOT_REACHED', message: 'Đơn hàng chưa đạt giá trị tối thiểu', cartItemId: null }]
+          ? [{ code: 'MIN_ORDER_NOT_REACHED', message: 'Don hang chua dat gia tri toi thieu', cartItemId: null }]
           : [],
       };
     }

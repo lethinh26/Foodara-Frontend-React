@@ -5,7 +5,7 @@ import { mockRestaurants, mockCategories } from '../mocks/restaurants';
 import { mockMenuItems, mockMenuCategories } from '../mocks/menuItems';
 import { mockReviews } from '../mocks/orders';
 import type { Restaurant, RestaurantCategory, RestaurantFilters } from '../types/restaurant';
-import type { MenuItem, MenuCategory } from '../types/menu';
+import type { MenuItem, MenuCategory, MenuItemPricing } from '../types/menu';
 import type { Review } from '../types/review';
 
 // Backend response interfaces
@@ -85,6 +85,11 @@ interface BackendMenuItemResponse {
   description?: string;
   imageUrl?: string;
   basePrice?: number;
+  discountedPrice?: number;
+  estimatedDiscountAmount?: number;
+  bestVoucher?: {
+    code?: string;
+  };
   isAvailable?: boolean;
   isPopular?: boolean;
   isNew?: boolean;
@@ -228,6 +233,15 @@ function mapBackendMenuCategory(c: BackendMenuCategoryResponse, restaurantId: st
   };
 }
 
+function mapPricing(m: BackendMenuItemResponse): MenuItemPricing {
+  const discountedPrice = Number(m.discountedPrice ?? m.basePrice ?? 0);
+  return {
+    discountedPrice,
+    estimatedDiscountAmount: Number(m.estimatedDiscountAmount ?? 0),
+    bestVoucherCode: m.bestVoucher?.code || undefined,
+  };
+}
+
 function mapBackendMenuItem(m: BackendMenuItemResponse, restaurantId: string): MenuItem {
   return {
     id: String(m.id || ''),
@@ -238,6 +252,7 @@ function mapBackendMenuItem(m: BackendMenuItemResponse, restaurantId: string): M
     image: String(m.imageUrl || ''),
     basePrice: Number(m.basePrice || 0),
     originalPrice: Number(m.basePrice || 0),
+    pricing: mapPricing(m),
     sizes: [],
     toppingGroups: [],
     variants: [],
@@ -298,6 +313,7 @@ function mapBackendMenuItemDetail(m: BackendMenuItemDetailResponse, restaurantId
 
   return {
     ...base,
+    pricing: mapPricing(m),
     sizes,
     toppingGroups,
   };
