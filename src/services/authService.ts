@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { delay } from '../utils/helpers';
 import { mockCustomer, mockMerchant, mockAdmin } from '../mocks/users';
 import toast from 'react-hot-toast';
-import type { User, LoginCredentials, RegisterData } from '../types/user';
+import { type User, type LoginCredentials, type RegisterData, type UserRole } from '../types/user';
 
 export interface UserProfileResponse {
   id: string;
@@ -15,6 +15,14 @@ export interface UserProfileResponse {
   emailVerified: boolean;
   phoneVerified: boolean;
   createdAt: string;
+}
+
+export interface UserResponse {
+  userId: string;
+  email: string;
+  fullName: string;
+  checkMerchant: boolean;
+  avatarUrl: string;
 }
 
 export interface AddressResponse {
@@ -82,7 +90,7 @@ async function fetchProfileWithToken(token: string): Promise<User> {
   });
   const body = await response.json();
   console.log(body);
-  
+
   if (body.code === 1000 && body.result) {
     return mapProfileToUser(body.result as UserProfileResponse);
   }
@@ -106,8 +114,8 @@ export const authService = {
 
     const result = await apiClient.post<{ accessToken: string; tokenType: string; expiresIn: number }>(
       '/v1/auth/login',
-      { 
-        username: credentials.email, 
+      {
+        username: credentials.email,
         password: credentials.password,
       }
     );
@@ -125,13 +133,13 @@ export const authService = {
     // accessToken, tokenType, expiresIn
     // Refresh token HttpOnly cookie
     console.log("abc");
-    
+
     const result = await apiClient.post<{ accessToken: string; tokenType: string; expiresIn: number }>(
       '/v1/auth/register',
       { email: data.email, password: data.password, fullName: data.fullName, phone: data.phone, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + data.fullName }
     );
     console.log(result);
-    
+
 
     const tempToken = result.accessToken;
 
@@ -160,6 +168,16 @@ export const authService = {
     }
     const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
     return mapProfileToUser(profile);
+  },
+
+  async getUserResponse(data: { email: string, password: string }): Promise<UserResponse> {
+    const result = await apiClient.get<UserResponse>(`/v1/users/check-merchant/${data.email}/${data.password}`);
+    return result;
+  },
+
+  async postUserRole(data: {userId: string, userRole: string}){
+    const result = await apiClient.post<UserRole>("/v1/auth/user-role", data)
+    return result
   },
 
   async updateProfile(data: { fullName?: string; phone?: string }): Promise<User> {

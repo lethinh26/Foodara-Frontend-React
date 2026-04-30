@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Button, Divider, Typography, message, Tabs } from 'antd';
+import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal, Avatar } from 'antd';
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
 import { loginSuccess, selectIsAuthenticated } from '../../store/authSlice';
-import { authService } from '../../services/authService';
+import { authService, type UserResponse } from '../../services/authService';
 import type { UserRole } from '../../types/user';
 
 const { Title, Text } = Typography;
@@ -13,14 +13,19 @@ interface LoginPageProps {
   role: UserRole;
 }
 
+
 export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+
+  const [isMerchantExistsModalOpen, setIsMerchantExistsModalOpen] = useState(false);
+  const [pendingUser, setPendingUser] = useState< UserResponse | null>(null);
+
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  
+
   const roleLabels: Record<UserRole, string> = {
     customer: 'Khách hàng',
     merchant: 'Đối tác quán',
@@ -34,6 +39,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, from]);
+
+
 
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
@@ -49,10 +56,43 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     }
   };
 
-  const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string }) => {
+  const checkMerchant = async (data: { email: string, password: string }): Promise<UserResponse | null> => {
+    setLoading(true)
+    // goi api check user
+    try {
+      console.log("fetch data");
+      const result = await authService.getUserResponse(data);
+
+      console.log(result);
+
+      return result
+
+    } catch (error) {
+      console.log(error);
+      return null;
+    }finally{
+      setLoading(false)
+    }
+  };
+
+
+  const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string}) => {
     setLoading(true);
     try {
+
+      const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
+      console.log(resultGetUser);
+      
+      if (resultGetUser && !resultGetUser?.checkMerchant) {
+        setIsMerchantExistsModalOpen(true);
+        setLoading(false);
+        setPendingUser({ email: resultGetUser.email, fullName: resultGetUser.fullName, userId: resultGetUser.userId, checkMerchant: resultGetUser.checkMerchant, avatarUrl: resultGetUser.avatarUrl });
+        
+        return;
+      }
+      
       const result = await authService.register(values);
+      await authService.postUserRole({userId: result.user.id, userRole: "merchant"})
       dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
       message.success('Đăng ký thành công!');
       navigate(from, { replace: true });
@@ -61,6 +101,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Hàm xử lý khi nhấn ACCEPT hoặc REJECT
+const handleAccept = async () => {
+  console.log("pendingUser:", pendingUser);
+
+
+  const result = await authService.postUserRole({
+    userId: pendingUser?.userId || "",
+    userRole: "merchant"
+  });
+
+  console.log("API RESULT:", result);
+  setActiveTab("login")
+  setIsMerchantExistsModalOpen(false)
+};
+
+
+  const handleReject = () => {
+    setIsMerchantExistsModalOpen(false);
+    setPendingUser(null);
   };
 
   return (
@@ -141,6 +202,104 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
           </>
         )}
       </Card>
+
+      {/* Modal Custom theo giao diện hình ảnh */}
+      <Modal
+        open={isMerchantExistsModalOpen}
+        onCancel={handleReject}
+        footer={null}
+        closable={false}
+        centered
+        width={400}
+        bodyStyle={{ padding: 0 }}
+        modalRender={(node) => (
+          <div style={{
+            border: '1px solid #1fde6c',
+            borderRadius: 8,
+            backgroundColor: '#fff',
+            overflow: 'hidden',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }}>
+            {node}
+          </div>
+        )}
+      >
+        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+          <Title level={4} style={{ color: '#1fde6c', marginTop: 0, marginBottom: 24 }}>
+            Bạn có muốn liên kết tài khoản không?
+          </Title>
+
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
+            <div style={{
+              border: '4px solid #1fde6c',
+              borderRadius: '50%',
+              padding: 4,
+              display: 'inline-flex'
+            }}>
+              <Avatar
+                size={110}
+                src={pendingUser?.avatarUrl}
+                alt='none'
+              />
+            </div>
+          </div>
+          <div style={{
+            border: '2px solid #1fde6c',
+            borderRadius: 4,
+            padding: '16px',
+            textAlign: 'left',
+            marginBottom: 32
+          }}>
+            {/* <div style={{ textAlign: 'right', marginBottom: 12 }}>
+              <Text type="secondary" style={{ fontSize: 13, color: '#333' }}>
+                Received: Just now
+              </Text>
+            </div> */}
+            <div style={{ marginBottom: 8 }}>
+              <Text strong style={{ fontSize: 16, color: '#333' }}>
+                Username: <span style={{ fontWeight: 'normal' }}>{pendingUser?.fullName || 'N/A'}</span>
+              </Text>
+            </div>
+            <div>
+              <Text strong style={{ fontSize: 16, color: '#333' }}>
+                Email: <span style={{ fontWeight: 'normal' }}>{pendingUser?.email || 'N/A'}</span>
+              </Text>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <Button
+              loading={loading}
+              block
+              onClick={handleAccept}
+              style={{
+                height: 50,
+                border: '3px solid #3ffc0b',
+                color: '#1fde6c',
+                fontWeight: 'bold',
+                fontSize: 16,
+                borderRadius: 4
+              }}
+            >
+              Đồng ý
+            </Button>
+            <Button
+              block
+              onClick={handleReject}
+              style={{
+                height: 50,
+                border: '3px solid #6A0000', // Đỏ sậm
+                color: '#C00000',
+                fontWeight: 'bold',
+                fontSize: 16,
+                borderRadius: 4
+              }}
+            >
+              Từ chối!
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
