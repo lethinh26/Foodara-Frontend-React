@@ -22,7 +22,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
 
   const [isMerchantExistsModalOpen, setIsMerchantExistsModalOpen] = useState(false);
-  const [pendingUser, setPendingUser] = useState< UserResponse | null>(null);
+  const [pendingUser, setPendingUser] = useState<UserResponse | null>(null);
 
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
@@ -45,6 +45,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
+      if (role == "merchant") {
+        // check có phải merchant không
+        const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
+        if (!resultGetUser?.checkMerchant) {
+          message.error('Đăng nhập thất bại. Vui lòng thử lại.');
+          return
+        }
+        // merchant đăng nhập
+      } else if (role == "admin") {
+        // check admin đăng nhập
+      } else if (role == "customer") {
+        // check customer đăng nhập
+      }
+
       const result = await authService.login(values);
       dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
       message.success('Đăng nhập thành công!');
@@ -62,40 +76,48 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     try {
       console.log("fetch data");
       const result = await authService.getUserResponse(data);
-
-      console.log(result);
-
+      
       return result
 
-    } catch (error) {
+    } catch (error: any) {
       console.log(error);
       return null;
-    }finally{
+    } finally {
       setLoading(false)
     }
   };
 
 
-  const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string}) => {
+  const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string }) => {
     setLoading(true);
     try {
+      if (role == "merchant") {
+        // merchant đăng ký
+        const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
 
-      const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
-      console.log(resultGetUser);
-      
-      if (resultGetUser && !resultGetUser?.checkMerchant) {
-        setIsMerchantExistsModalOpen(true);
-        setLoading(false);
-        setPendingUser({ email: resultGetUser.email, fullName: resultGetUser.fullName, userId: resultGetUser.userId, checkMerchant: resultGetUser.checkMerchant, avatarUrl: resultGetUser.avatarUrl });
-        
-        return;
+        if (resultGetUser && !resultGetUser?.checkMerchant) {
+          setIsMerchantExistsModalOpen(true);
+          setLoading(false);
+          setPendingUser({ email: resultGetUser.email, fullName: resultGetUser.fullName, userId: resultGetUser.userId, checkMerchant: resultGetUser.checkMerchant, avatarUrl: resultGetUser.avatarUrl });
+
+          return;
+        }
+
+        const result = await authService.register(values);
+        // dang ky role cho merchant
+        await authService.postUserRole({ userId: result.user.id, userRole: "merchant" })
+        dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+        message.success('Đăng ký thành công!');
+        navigate(from, { replace: true });
+      } else if (role == "admin") {
+        // admin không cho đăng ký
+      } else if (role == "customer") {
+        // customer đăng ký
+        const result = await authService.register(values);
+        dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+        message.success('Đăng ký thành công!');
+        navigate(from, { replace: true });
       }
-      
-      const result = await authService.register(values);
-      await authService.postUserRole({userId: result.user.id, userRole: "merchant"})
-      dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
-      message.success('Đăng ký thành công!');
-      navigate(from, { replace: true });
     } catch (err: any) {
       message.error(err?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
     } finally {
@@ -104,19 +126,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   };
 
   // Hàm xử lý khi nhấn ACCEPT hoặc REJECT
-const handleAccept = async () => {
-  console.log("pendingUser:", pendingUser);
+  const handleAccept = async () => {
+    console.log("pendingUser:", pendingUser);
 
+    const result = await authService.postUserRole({
+      userId: pendingUser?.userId || "",
+      userRole: "merchant"
+    });
 
-  const result = await authService.postUserRole({
-    userId: pendingUser?.userId || "",
-    userRole: "merchant"
-  });
-
-  console.log("API RESULT:", result);
-  setActiveTab("login")
-  setIsMerchantExistsModalOpen(false)
-};
+    console.log("API RESULT:", result);
+    setActiveTab("login")
+    setIsMerchantExistsModalOpen(false)
+  };
 
 
   const handleReject = () => {
