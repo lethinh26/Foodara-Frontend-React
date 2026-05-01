@@ -17,17 +17,16 @@ export function useSessionRestore() {
     const restoreSession = async () => {
       try {
         const newAccessToken = await refreshAccessToken();
-        
+
         if (newAccessToken) {
           dispatch(setToken(newAccessToken));
-          
-          const user = await authService.getProfile();
+
+          const role = localStorage.getItem('foodara:lastRole') as 'customer' | 'merchant' | 'admin' | null;
+          const user = await authService.getProfileWithToken(newAccessToken, role || 'customer');
           dispatch(setUser(user));
-          
-          console.log('✅ Session restored successfully');
         }
-      } catch (error) {
-        console.log('ℹ️ No valid session to restore');
+      } catch {
+        //
       }
     };
 

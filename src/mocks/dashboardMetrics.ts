@@ -1,7 +1,5 @@
 import type { AuditLog, AdminDashboardData } from '../types/admin';
 import type { PricingConfig, SLAConfig } from '../types/finance';
-import type { Campaign } from '../types/promotion';
-import type { Region } from '../types/location';
 
 export const mockDashboard: AdminDashboardData = {
   totalOrders: { id: 'm1', name: 'Tổng đơn hàng', value: 12456, previousValue: 11230, change: 10.9, changeType: 'increase', unit: 'đơn', period: 'Tháng 3/2025', icon: 'ShoppingBag', color: '#4CAF50' },
@@ -43,7 +41,7 @@ export const mockDashboard: AdminDashboardData = {
 
 
 export const mockPricingConfigs: PricingConfig[] = [
-  { id: 'pc-001', name: 'Khu vực trung tâm', description: 'Quận 1, 3, 5, 10', zoneId: 'zone-1', zoneName: 'Trung tâm TP.HCM', baseDeliveryFee: 15000, perKmFee: 5000, peakHourMultiplier: 1.5, peakHours: ['11:00-13:00', '17:00-20:00'], rainMultiplier: 1.3, platformFeePercentage: 3, platformFeeMin: 2000, platformFeeMax: 10000, minOrderValue: 20000, smallOrderFee: 10000, smallOrderThreshold: 30000, isActive: true, updatedAt: '2025-03-01T00:00:00Z', updatedBy: 'admin' },
+  { id: 'pc-001', name: 'Khu vực trung tâm', description: 'Quận 1, 3, 5, 10', baseDeliveryFee: 15000, perKmFee: 5000, peakHourMultiplier: 1.5, peakHours: ['11:00-13:00', '17:00-20:00'], rainMultiplier: 1.3, platformFeePercentage: 3, platformFeeMin: 2000, platformFeeMax: 10000, minOrderValue: 20000, smallOrderFee: 10000, smallOrderThreshold: 30000, isActive: true, updatedAt: '2025-03-01T00:00:00Z', updatedBy: 'admin' },
 ];
 
 export const mockSLAConfigs: SLAConfig[] = [
@@ -61,32 +59,4 @@ export const mockAuditLogs: AuditLog[] = [
   { id: 'al-003', userId: 'user-003', userName: 'Lê Quốc Cường', userRole: 'admin', action: 'Khoá tài khoản', module: 'Users', targetType: 'user', targetId: 'user-007', targetName: 'Đặng Văn Giang', details: 'Vi phạm chính sách đặt hàng', ipAddress: '42.118.xxx.xxx', userAgent: 'Chrome/122', timestamp: '2025-02-20T10:00:00Z', status: 'success', metadata: {} },
 ];
 
-export const mockRegions: Region[] = [
-  {
-    id: 'reg-001', name: 'Miền Nam', code: 'MN', isActive: true,
-    cities: [
-      {
-        id: 'city-001', regionId: 'reg-001', name: 'TP. Hồ Chí Minh', code: 'HCM', isActive: true,
-        districts: [
-          { id: 'dist-001', cityId: 'city-001', name: 'Quận 1', code: 'Q1', isActive: true, zones: [{ id: 'zone-1', districtId: 'dist-001', name: 'Trung tâm Q1', code: 'Q1-TT', isActive: true, polygon: [], baseFee: 15000, peakMultiplier: 1.5 }] },
-          { id: 'dist-002', cityId: 'city-001', name: 'Quận 3', code: 'Q3', isActive: true, zones: [] },
-          { id: 'dist-003', cityId: 'city-001', name: 'Quận 5', code: 'Q5', isActive: true, zones: [] },
-          { id: 'dist-004', cityId: 'city-001', name: 'Quận 10', code: 'Q10', isActive: true, zones: [] },
-          { id: 'dist-005', cityId: 'city-001', name: 'Quận Bình Thạnh', code: 'BT', isActive: true, zones: [] },
-          { id: 'dist-006', cityId: 'city-001', name: 'Quận Tân Bình', code: 'TB', isActive: false, zones: [] },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'reg-002', name: 'Miền Bắc', code: 'MB', isActive: true,
-    cities: [
-      {
-        id: 'city-002', regionId: 'reg-002', name: 'Hà Nội', code: 'HN', isActive: false,
-        districts: [
-          { id: 'dist-010', cityId: 'city-002', name: 'Hoàn Kiếm', code: 'HK', isActive: false, zones: [] },
-        ],
-      },
-    ],
-  },
-];
+

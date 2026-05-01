@@ -8,7 +8,6 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   delivering: 'Đang giao',
   delivered: 'Đã giao',
   cancelled: 'Đã huỷ',
-  refunded: 'Đã hoàn tiền',
 };
 
 export const ORDER_STATUS_COLORS: Record<string, string> = {
@@ -21,7 +20,6 @@ export const ORDER_STATUS_COLORS: Record<string, string> = {
   delivering: '#4CAF50',
   delivered: '#4CAF50',
   cancelled: '#F44336',
-  refunded: '#9E9E9E',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

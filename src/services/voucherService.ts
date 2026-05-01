@@ -49,6 +49,7 @@ interface BackendVoucherCartPricing {
   totalDiscount?: number;
   subtotalAfterVoucher?: number;
   appliedPlatformVoucher?: BackendVoucherPricing | null;
+  appliedPlatformShipVoucher?: BackendVoucherPricing | null;
   appliedStoreVoucher?: BackendVoucherPricing | null;
   bestPlatformVoucher?: BackendVoucherPricing | null;
   bestStoreVoucher?: BackendVoucherPricing | null;
@@ -94,10 +95,12 @@ const mapVoucher = (item: BackendVoucher): Voucher => {
     conditions: [
       minOrder > 0 ? `Đơn tối thiểu ${minOrder.toLocaleString('vi-VN')}d` : 'Không yêu cầu đơn tối thiểu',
       mapDiscountType(item.discountType) === 'percentage'
-        ? `Giảm ${discountValue}%${maxDiscount > 0 ? ` tối đa ${maxDiscount.toLocaleString('vi-VN')}d` : ''}`
+        ? `Giảm ${discountValue}%${maxDiscount > 0 ? ` tối đa ${maxDiscount.toLocaleString('vi-VN')}đ` : ''}`
         : mapDiscountType(item.discountType) === 'fixed'
-          ? `Giảm ${discountValue.toLocaleString('vi-VN')}d`
-          : `Giảm phí ship ${discountValue.toLocaleString('vi-VN')}d`,
+          ? `Giảm ${discountValue.toLocaleString('vi-VN')}đ`
+          : discountValue >= 100
+            ? `Miễn phí giao hàng${maxDiscount > 0 ? ` (tối đa ${maxDiscount.toLocaleString('vi-VN')}đ)` : ''}`
+            : `Giảm ${discountValue}% phí ship${maxDiscount > 0 ? ` tối đa ${maxDiscount.toLocaleString('vi-VN')}đ` : ''}`,
     ],
     isCollected: Boolean(item.isCollected),
     isUsed: Boolean(item.isUsed),
@@ -126,6 +129,7 @@ const mapCartPricing = (item: BackendVoucherCartPricing): VoucherCartPricing => 
   totalDiscount: Number(item.totalDiscount || 0),
   subtotalAfterVoucher: Number(item.subtotalAfterVoucher || 0),
   appliedPlatformVoucher: mapVoucherPricing(item.appliedPlatformVoucher),
+  appliedPlatformShipVoucher: mapVoucherPricing(item.appliedPlatformShipVoucher),
   appliedStoreVoucher: mapVoucherPricing(item.appliedStoreVoucher),
   bestPlatformVoucher: mapVoucherPricing(item.bestPlatformVoucher),
   bestStoreVoucher: mapVoucherPricing(item.bestStoreVoucher),
@@ -138,7 +142,7 @@ export const voucherService = {
   async getStoreVouchers(storeId: string, subtotal?: number): Promise<Voucher[]> {
     if (env.isMockMode) {
       await delay(300);
-      return mockVouchers.filter(v => v.scope === 'platform' || v.storeId === storeId);
+      return mockVouchers.filter(v => v.scope === 'store' && v.storeId === storeId);
     }
 
     const params: Record<string, string> = {};
@@ -191,10 +195,11 @@ export const voucherService = {
         totalDiscount: best.totalDiscount,
         subtotalAfterVoucher: 0,
         appliedPlatformVoucher: best.platformVoucher,
+        appliedPlatformShipVoucher: null,
         appliedStoreVoucher: best.storeVoucher,
         bestPlatformVoucher: best.platformVoucher,
         bestStoreVoucher: best.storeVoucher,
-        availableVouchers: mockVouchers.filter(v => v.scope === 'platform' || v.storeId === storeId),
+        availableVouchers: mockVouchers,
         canApply: true,
         message: 'Success',
       };
@@ -204,7 +209,7 @@ export const voucherService = {
     return mapCartPricing(response);
   },
 
-  async applyVouchers(payload: { storeId: string; platformVoucherId?: string; storeVoucherId?: string }): Promise<VoucherCartPricing> {
+  async applyVouchers(payload: { storeId: string; platformVoucherId?: string; platformShipVoucherId?: string; storeVoucherId?: string }): Promise<VoucherCartPricing> {
     if (env.isMockMode) {
       await delay(250);
       return this.getAvailableForCart(payload.storeId);
@@ -232,7 +237,7 @@ export const voucherService = {
     if (env.isMockMode) {
       await delay(250);
       const matched = mockVouchers
-        .filter(v => v.isCollected !== false && (v.scope === 'platform' || v.storeId === storeId) && subtotal >= v.minOrderValue)
+        .filter(v => v.isCollected !== false && subtotal >= v.minOrderValue)
         .map(v => {
           let discount = 0;
           if (v.type === 'percentage') {
@@ -247,7 +252,7 @@ export const voucherService = {
         .filter(x => x.voucher.scope === 'platform')
         .sort((a, b) => b.discount - a.discount)[0];
       const store = matched
-        .filter(x => x.voucher.scope === 'store' && x.voucher.storeId === storeId)
+        .filter(x => x.voucher.scope === 'store')
         .sort((a, b) => b.discount - a.discount)[0];
 
       return {

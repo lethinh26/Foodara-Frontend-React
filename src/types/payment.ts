@@ -11,7 +11,7 @@ export interface PaymentMethod {
   metadata: Record<string, string>; // card last4, wallet name, etc.
 }
 
-export type TransactionStatus = 'pending' | 'processing' | 'success' | 'failed' | 'refunded' | 'cancelled';
+export type TransactionStatus = 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
 
 export interface PaymentTransaction {
   id: string;

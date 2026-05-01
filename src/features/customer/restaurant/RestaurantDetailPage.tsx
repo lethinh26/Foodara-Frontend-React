@@ -219,9 +219,9 @@ const RestaurantDetailPage: React.FC = () => {
         {storeVouchers.length === 0 ? (
           <Text type="secondary" style={{ marginTop: 12, display: 'block' }}>Quán này chưa có voucher khả dụng.</Text>
         ) : (
-          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
-            {storeVouchers.slice(0, 3).map(voucher => (
-              <Card key={voucher.id} size="small" style={{ borderRadius: 10, borderLeft: `4px solid ${voucher.scope === 'platform' ? 'var(--primary)' : 'var(--secondary)'}` }}>
+          <div style={{ marginTop: 12, display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, scrollSnapType: 'x mandatory' }}>
+            {storeVouchers.filter(v => v.scope === 'store').map(voucher => (
+              <Card key={voucher.id} size="small" style={{ borderRadius: 10, borderLeft: `4px solid ${voucher.scope === 'platform' ? 'var(--primary)' : 'var(--secondary)'}`, minWidth: 280, flex: '0 0 auto', scrollSnapAlign: 'start' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start'}}>
                   <div>
                     <Text strong>{voucher.title}</Text>
@@ -234,9 +234,9 @@ const RestaurantDetailPage: React.FC = () => {
                   </div>
                   {voucher.isCollected ? <Tag color="green">Đã thu thập</Tag> : <Tag color="gold">Chưa thu thập</Tag>}
                 </div>
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <Button size="small" onClick={() => setVoucherDetail(voucher)}>Chi tiết</Button>
-                  {voucher.isCollected ?? (
+                  {!voucher.isCollected && (
                     <Button
                       size="small"
                       type="primary"

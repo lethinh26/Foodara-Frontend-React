@@ -12,7 +12,7 @@ const PricingConfigPage: React.FC = () => {
 
   const pricingCols = [
     { title: 'Tên', dataIndex: 'name', render: (n: string) => <Text strong>{n}</Text> },
-    { title: 'Vùng', dataIndex: 'zoneName' },
+    { title: 'Mô tả', dataIndex: 'description' },
     { title: 'Phí cơ bản', dataIndex: 'baseDeliveryFee', render: (v: number) => formatVND(v) },
     { title: 'Phí/km', dataIndex: 'perKmFee', render: (v: number) => formatVND(v) },
     { title: 'Cao điểm', dataIndex: 'peakHourMultiplier', render: (v: number) => `${v}x` },

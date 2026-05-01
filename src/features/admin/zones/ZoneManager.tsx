@@ -1,26 +1,11 @@
 import React, { useState } from 'react';
-import { Card, Tree, Tag, Button, Typography, Space, Modal, Form, Input, message } from 'antd';
+import { Card, Typography, Button, Space, Modal, Form, Input, message, Empty } from 'antd';
 import { MapPinned, Plus } from 'lucide-react';
-import { mockRegions } from '../../../mocks/dashboardMetrics';
 
 const { Title, Text } = Typography;
 
 const ZoneManager: React.FC = () => {
-  const [regions] = useState(mockRegions);
   const [modal, setModal] = useState(false);
-
-  const treeData = regions.map(region => ({
-    title: <Space><Text strong>{region.name}</Text><Tag color={region.isActive ? 'green' : 'default'}>{region.code}</Tag></Space>,
-    key: region.id,
-    children: region.cities.map(city => ({
-      title: <Space><Text>{city.name}</Text><Tag color={city.isActive ? 'blue' : 'default'}>{city.code}</Tag>{!city.isActive && <Tag color="orange">Chưa mở</Tag>}</Space>,
-      key: city.id,
-      children: city.districts.map(dist => ({
-        title: <Space><Text>{dist.name}</Text><Tag>{dist.code}</Tag>{dist.isActive ? <Tag color="green">Hoạt động</Tag> : <Tag color="red">Tắt</Tag>}</Space>,
-        key: dist.id,
-      })),
-    })),
-  }));
 
   return (
     <div className="animate-fade-in">
@@ -39,8 +24,8 @@ const ZoneManager: React.FC = () => {
         </div>
       </Card>
 
-      <Card title="Cây vùng hoạt động" style={{ borderRadius: 12 }}>
-        <Tree treeData={treeData} defaultExpandAll showLine />
+      <Card title="Vùng hoạt động" style={{ borderRadius: 12 }}>
+        <Empty description="Quản lý vùng hoạt động theo tỉnh/quận/phường (v4 schema)" />
       </Card>
 
       <Modal title="Thêm vùng" open={modal} onCancel={() => setModal(false)} onOk={() => { setModal(false); message.success('Đã thêm!'); }}>
