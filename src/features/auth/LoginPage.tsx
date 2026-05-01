@@ -20,8 +20,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-  const [linking, setLinking] = useState(false);
-  const [linkCandidate, setLinkCandidate] = useState<{ email: string; password: string; fullName: string; phone: string } | null>(null);
+
+  const [isMerchantExistsModalOpen, setIsMerchantExistsModalOpen] = useState(false);
+  const [pendingUser, setPendingUser] = useState<UserResponse | null>(null);
+
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   const roleLabels: Record<UserRole, string> = {
@@ -43,7 +45,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
-      const result = await authService.login(values, role);
+      if (role == "merchant") {
+        // check có phải merchant không
+        const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
+        if (!resultGetUser?.checkMerchant) {
+          message.error('Đăng nhập thất bại. Vui lòng thử lại.');
+          return
+        }
+        // merchant đăng nhập
+      } else if (role == "admin") {
+        // check admin đăng nhập
+      } else if (role == "customer") {
+        // check customer đăng nhập
+      }
+
+      const result = await authService.login(values);
       dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
       message.success('Đăng nhập thành công!');
       navigate(from, { replace: true });
@@ -54,35 +70,54 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     }
   };
 
-  const completeLogin = (result: { user: any; token: string }, successText: string) => {
-    dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
-    message.success(successText);
-    navigate(from, { replace: true });
+  const checkMerchant = async (data: { email: string, password: string }): Promise<UserResponse | null> => {
+    setLoading(true)
+    // goi api check user
+    try {
+      console.log("fetch data");
+      const result = await authService.getUserResponse(data);
+      
+      return result
+
+    } catch (error: any) {
+      console.log(error);
+      return null;
+    } finally {
+      setLoading(false)
+    }
   };
+
 
   const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string }) => {
     setLoading(true);
     try {
-      const check = await authService.checkRegister(values, role);
-      if (check.exists) {
-        if (check.canLinkRole) {
-          setLinkCandidate(values);
+      if (role == "merchant") {
+        // merchant đăng ký
+        const resultGetUser = await checkMerchant({ email: values.email, password: values.password });
+
+        if (resultGetUser && !resultGetUser?.checkMerchant) {
+          setIsMerchantExistsModalOpen(true);
+          setLoading(false);
+          setPendingUser({ email: resultGetUser.email, fullName: resultGetUser.fullName, userId: resultGetUser.userId, checkMerchant: resultGetUser.checkMerchant, avatarUrl: resultGetUser.avatarUrl });
+
           return;
         }
-        const errorText = check.passwordMatched
-          ? `Tai khoan nay da co vai tro ${roleLabels[role]}. Vui long dang nhap.`
-          : 'Email da ton tai nhung mat khau khong dung.';
-        message.error(errorText);
-        return;
-      }
 
-      const result = await authService.register(values, role);
-      if (role === 'merchant') {
-        const linked = await authService.linkRole({ email: values.email, password: values.password }, role);
-        completeLogin(linked, 'Dang ky doi tac thanh cong!');
-        return;
+        const result = await authService.register(values);
+        // dang ky role cho merchant
+        await authService.postUserRole({ userId: result.user.id, userRole: "merchant" })
+        dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+        message.success('Đăng ký thành công!');
+        navigate(from, { replace: true });
+      } else if (role == "admin") {
+        // admin không cho đăng ký
+      } else if (role == "customer") {
+        // customer đăng ký
+        const result = await authService.register(values);
+        dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+        message.success('Đăng ký thành công!');
+        navigate(from, { replace: true });
       }
-      completeLogin(result, 'Dang ky thanh cong!');
     } catch (err: any) {
       message.error(err?.message || 'Dang ky that bai. Vui long thu lai.');
     } finally {
@@ -90,18 +125,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     }
   };
 
-  const handleLinkRole = async () => {
-    if (!linkCandidate) return;
-    setLinking(true);
-    try {
-      const result = await authService.linkRole({ email: linkCandidate.email, password: linkCandidate.password }, role);
-      completeLogin(result, `Da lien ket vai tro ${roleLabels[role]}!`);
-    } catch (err: any) {
-      message.error(err?.message || 'Lien ket tai khoan that bai.');
-    } finally {
-      setLinking(false);
-      setLinkCandidate(null);
-    }
+  // Hàm xử lý khi nhấn ACCEPT hoặc REJECT
+  const handleAccept = async () => {
+    console.log("pendingUser:", pendingUser);
+
+    const result = await authService.postUserRole({
+      userId: pendingUser?.userId || "",
+      userRole: "merchant"
+    });
+
+    console.log("API RESULT:", result);
+    setActiveTab("login")
+    setIsMerchantExistsModalOpen(false)
+  };
+
+
+  const handleReject = () => {
+    setIsMerchantExistsModalOpen(false);
+    setPendingUser(null);
   };
 
   return (
