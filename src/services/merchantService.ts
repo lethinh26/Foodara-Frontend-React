@@ -121,11 +121,10 @@ export const merchantService = {
         phone: data.phone || '',
         addressLine: data.addressLine,
         ward: data.ward || '',
-        districtId: data.districtId || '',
-        cityId: data.cityId || '',
+        districtName: data.districtName || '',
+        cityName: data.cityName || '',
         latitude: data.latitude || 0,
         longitude: data.longitude || 0,
-        serviceZoneId: data.serviceZoneId || '',
         isOpen: false,
         isActive: true,
         autoAcceptOrders: data.autoAcceptOrders || false,
@@ -163,11 +162,10 @@ export const merchantService = {
         phone: '0901234567',
         addressLine: '123 Nguyễn Trãi',
         ward: 'Phường 1',
-        districtId: 'd1',
-        cityId: 'c1',
-        latitude: 10.7629,
-        longitude: 106.6824,
-        serviceZoneId: '',
+        districtName: 'Quận 1',
+        cityName: 'TP. Hồ Chí Minh',
+        latitude: 10.7755,
+        longitude: 106.7004,
         isOpen: false,
         isActive: true,
         autoAcceptOrders: false,
@@ -195,11 +193,10 @@ export const merchantService = {
         phone: data.phone || '',
         addressLine: data.addressLine || '',
         ward: data.ward || '',
-        districtId: data.districtId || '',
-        cityId: data.cityId || '',
+        districtName: data.districtName || '',
+        cityName: data.cityName || '',
         latitude: data.latitude || 0,
         longitude: data.longitude || 0,
-        serviceZoneId: data.serviceZoneId || '',
         isOpen: false,
         isActive: true,
         autoAcceptOrders: data.autoAcceptOrders || false,
@@ -229,11 +226,10 @@ export const merchantService = {
         phone: '0901234567',
         addressLine: '123 Nguyễn Trãi',
         ward: 'Phường 1',
-        districtId: 'd1',
-        cityId: 'c1',
+        districtName: 'Quận 1',
+        cityName: 'TP. Hồ Chí Minh',
         latitude: 0,
         longitude: 0,
-        serviceZoneId: '',
         isOpen: true,
         isActive: true,
         autoAcceptOrders: false,
@@ -310,4 +306,75 @@ export const merchantService = {
     toast.success('Cập nhật tài khoản ngân hàng thành công!');
     return result;
   },
+};
+
+
+export interface MerchantMenuCategoryRequest {
+  storeId: string;
+  name: string;
+  description?: string;
+  displayOrder?: number;
+  isActive?: boolean;
+}
+
+export interface MerchantMenuItemRequest {
+  storeId: string;
+  categoryId?: string;
+  name: string;
+  description?: string;
+  imageUrl?: string;
+  basePrice: number;
+  isAvailable?: boolean;
+  isActive?: boolean;
+  trackInventory?: boolean;
+  stockQuantity?: number;
+  maxQuantityPerOrder?: number;
+  isPopular?: boolean;
+  isNew?: boolean;
+  displayOrder?: number;
+}
+
+export const merchantMenuApi = {
+  getCategories: (storeId: string) => apiClient.get<any[]>(`/v1/merchant/stores/${storeId}/menu-categories`),
+  createCategory: (storeId: string, data: Omit<MerchantMenuCategoryRequest, 'storeId'>) =>
+    apiClient.post<any>(`/v1/merchant/stores/${storeId}/menu-categories`, { ...data, storeId }),
+  updateCategory: (id: string, data: MerchantMenuCategoryRequest) =>
+    apiClient.put<any>(`/v1/merchant/menu-categories/${id}`, data),
+  deleteCategory: (id: string) => apiClient.delete<any>(`/v1/merchant/menu-categories/${id}`),
+  getItems: (storeId: string) => apiClient.get<any[]>(`/v1/merchant/stores/${storeId}/menu-items`),
+  createItem: (storeId: string, data: Omit<MerchantMenuItemRequest, 'storeId'>) =>
+    apiClient.post<any>(`/v1/merchant/stores/${storeId}/menu-items`, { ...data, storeId }),
+  updateItem: (id: string, data: MerchantMenuItemRequest) =>
+    apiClient.put<any>(`/v1/merchant/menu-items/${id}`, data),
+  deleteItem: (id: string) => apiClient.delete<any>(`/v1/merchant/menu-items/${id}`),
+  updateAvailability: (id: string, isAvailable: boolean) =>
+    apiClient.put<any>(`/v1/merchant/menu-items/${id}/availability?isAvailable=${isAvailable}`, {}),
+  updateStock: (id: string, stockQuantity: number) =>
+    apiClient.put<any>(`/v1/merchant/menu-items/${id}/stock?stockQuantity=${stockQuantity}`, {}),
+};
+
+export const merchantOrderApi = {
+  getOrders: (storeId: string) => apiClient.get<any[]>(`/v1/merchant/stores/${storeId}/orders`),
+  getOrder: (storeId: string, orderId: string) => apiClient.get<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}`),
+  accept: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/accept`, {}),
+  reject: (storeId: string, orderId: string, reason: string) =>
+    apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/reject`, { reason }),
+  preparing: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/preparing`, {}),
+  ready: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/ready`, {}),
+  handover: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/handover`, {}),
+};
+
+export const merchantPromotionApi = {
+  getVouchers: () => apiClient.get<any[]>('/v1/merchant/vouchers'),
+  createVoucher: (data: unknown) => apiClient.post<any>('/v1/merchant/vouchers', data),
+  updateVoucher: (id: string, data: unknown) => apiClient.put<any>(`/v1/merchant/vouchers/${id}`, data),
+  getAvailableCampaigns: () => apiClient.get<any[]>('/v1/merchant/campaigns/available'),
+  joinCampaign: (id: string) => apiClient.post<any>(`/v1/merchant/campaigns/${id}/join`),
+};
+
+export const merchantReportApi = {
+  overview: () => apiClient.get<any>('/v1/merchant/reports/overview'),
+  orders: () => apiClient.get<any[]>('/v1/merchant/reports/orders'),
+  settlements: () => apiClient.get<any[]>('/v1/merchant/settlements'),
+  settlementDetail: (id: string) => apiClient.get<any>(`/v1/merchant/settlements/${id}`),
 };

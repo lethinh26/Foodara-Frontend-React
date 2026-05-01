@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Button, Divider, Typography, message, Tabs } from 'antd';
+import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal } from 'antd';
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
 import { loginSuccess, selectIsAuthenticated } from '../../store/authSlice';
@@ -19,6 +19,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const dispatch = useAppDispatch();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [linking, setLinking] = useState(false);
+  const [linkCandidate, setLinkCandidate] = useState<{ email: string; password: string; fullName: string; phone: string } | null>(null);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   
   const roleLabels: Record<UserRole, string> = {
@@ -38,7 +40,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
-      const result = await authService.login(values);
+      const result = await authService.login(values, role);
       dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
       message.success('Đăng nhập thành công!');
       navigate(from, { replace: true });
@@ -49,17 +51,53 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     }
   };
 
+  const completeLogin = (result: { user: any; token: string }, successText: string) => {
+    dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+    message.success(successText);
+    navigate(from, { replace: true });
+  };
+
   const handleRegister = async (values: { email: string; password: string; fullName: string; phone: string }) => {
     setLoading(true);
     try {
-      const result = await authService.register(values);
-      dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
-      message.success('Đăng ký thành công!');
-      navigate(from, { replace: true });
+      const check = await authService.checkRegister(values, role);
+      if (check.exists) {
+        if (check.canLinkRole) {
+          setLinkCandidate(values);
+          return;
+        }
+        const errorText = check.passwordMatched
+          ? `Tai khoan nay da co vai tro ${roleLabels[role]}. Vui long dang nhap.`
+          : 'Email da ton tai nhung mat khau khong dung.';
+        message.error(errorText);
+        return;
+      }
+
+      const result = await authService.register(values, role);
+      if (role === 'merchant') {
+        const linked = await authService.linkRole({ email: values.email, password: values.password }, role);
+        completeLogin(linked, 'Dang ky doi tac thanh cong!');
+        return;
+      }
+      completeLogin(result, 'Dang ky thanh cong!');
     } catch (err: any) {
-      message.error(err?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      message.error(err?.message || 'Dang ky that bai. Vui long thu lai.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLinkRole = async () => {
+    if (!linkCandidate) return;
+    setLinking(true);
+    try {
+      const result = await authService.linkRole({ email: linkCandidate.email, password: linkCandidate.password }, role);
+      completeLogin(result, `Da lien ket vai tro ${roleLabels[role]}!`);
+    } catch (err: any) {
+      message.error(err?.message || 'Lien ket tai khoan that bai.');
+    } finally {
+      setLinking(false);
+      setLinkCandidate(null);
     }
   };
 
@@ -141,6 +179,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
           </>
         )}
       </Card>
+
+      <Modal
+        title="Lien ket tai khoan Foodara"
+        open={!!linkCandidate}
+        onOk={handleLinkRole}
+        onCancel={() => setLinkCandidate(null)}
+        okText={`Lien ket ${roleLabels[role]}`}
+        cancelText="Khong, de sau"
+        confirmLoading={linking}
+      >
+        <Text>
+          Email nay da ton tai va mat khau khop. Ban co muon dung chung tai khoan nay
+          cho vai tro {roleLabels[role]} khong?
+        </Text>
+      </Modal>
     </div>
   );
 };

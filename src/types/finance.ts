@@ -3,8 +3,6 @@ export interface PricingConfig {
   id: string;
   name: string;
   description: string;
-  zoneId: string;
-  zoneName: string;
   baseDeliveryFee: number;
   perKmFee: number;
   peakHourMultiplier: number;

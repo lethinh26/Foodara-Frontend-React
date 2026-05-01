@@ -237,29 +237,49 @@ export const cartService = {
       }
 
       const unitPrice = getMockUnitPrice(payload);
-      const item: CartItem = {
-        id: generateId(),
-        menuItemId: payload.menuItemId ?? '',
-        restaurantId: payload.storeId,
-        name: payload.itemPreview?.name ?? 'Mon an',
-        image: payload.itemPreview?.image ?? '',
-        basePrice: payload.itemPreview?.basePrice ?? 0,
-        quantity: payload.quantity,
-        selectedSize: payload.itemPreview?.selectedSize ?? null,
-        selectedToppings: payload.itemPreview?.selectedToppings ?? [],
-        selectedVariant: null,
-        note: payload.specialInstructions ?? '',
-        totalPrice: unitPrice * payload.quantity,
-        discountedUnitPrice: unitPrice,
-        discountedTotalPrice: unitPrice * payload.quantity,
-      };
+      const sortedOptionIds = [...(payload.optionItemIds || [])].sort().join(',');
+
+      // Check for existing item with same menuItemId + options + note to stack
+      const existingItem = mockSnapshot.items.find(item => {
+        if (item.menuItemId !== (payload.menuItemId ?? '')) return false;
+        const existingOptionIds = [
+          ...(item.selectedSize ? [item.selectedSize.sizeId] : []),
+          ...item.selectedToppings.map(t => t.optionId),
+        ].sort().join(',');
+        if (existingOptionIds !== sortedOptionIds) return false;
+        if ((item.note || '') !== (payload.specialInstructions || '')) return false;
+        return true;
+      });
+
+      if (existingItem) {
+        existingItem.quantity += payload.quantity;
+        existingItem.totalPrice = unitPrice * existingItem.quantity;
+        existingItem.discountedTotalPrice = existingItem.totalPrice;
+      } else {
+        const item: CartItem = {
+          id: generateId(),
+          menuItemId: payload.menuItemId ?? '',
+          restaurantId: payload.storeId,
+          name: payload.itemPreview?.name ?? 'Mon an',
+          image: payload.itemPreview?.image ?? '',
+          basePrice: payload.itemPreview?.basePrice ?? 0,
+          quantity: payload.quantity,
+          selectedSize: payload.itemPreview?.selectedSize ?? null,
+          selectedToppings: payload.itemPreview?.selectedToppings ?? [],
+          selectedVariant: null,
+          note: payload.specialInstructions ?? '',
+          totalPrice: unitPrice * payload.quantity,
+          discountedUnitPrice: unitPrice,
+          discountedTotalPrice: unitPrice * payload.quantity,
+        };
+        mockSnapshot.items = [...mockSnapshot.items, item];
+      }
 
       mockSnapshot.id = mockSnapshot.id ?? generateId();
       mockSnapshot.storeId = payload.storeId;
       mockSnapshot.storeName = payload.storeName ?? mockSnapshot.storeName;
       mockSnapshot.isStoreOpen = true;
       mockSnapshot.storeMinOrderAmount = mockSnapshot.storeMinOrderAmount || 0;
-      mockSnapshot.items = [...mockSnapshot.items, item];
       refreshMockSummary();
       return mockSnapshot;
     }

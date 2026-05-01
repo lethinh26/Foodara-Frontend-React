@@ -13,8 +13,7 @@ export type OrderStatus =
   | 'delivered'
   | 'completed'
   | 'cancelled'
-  | 'failed'
-  | 'refunded';
+  | 'failed';
 
 export interface CartItem {
   id: string; // unique cart item ID
@@ -66,7 +65,7 @@ export interface Order {
   statusHistory: OrderStatusHistory[];
   pricing: CheckoutPricing;
   paymentMethod: string;
-  paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
+  paymentStatus: 'pending' | 'paid' | 'failed';
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;

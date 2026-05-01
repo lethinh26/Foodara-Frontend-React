@@ -158,8 +158,8 @@ const ProfilePage: React.FC = () => {
         recipientPhone: values.recipientPhone,
         addressLine: values.addressLine,
         ward: selectedWard?.name || values.ward || '',
-        cityId: selectedProvince?.code?.toString() || '',
-        districtId: selectedDistrict?.code?.toString() || '',
+        cityName: selectedProvince?.name || '',
+        districtName: selectedDistrict?.name || '',
         deliveryNote: values.deliveryNote,
         isDefault: values.isDefault || false,
       };

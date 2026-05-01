@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Tag, Button, Typography, Empty, Tabs, Modal, Input, Space, Badge, message } from 'antd';
 import { Check, X, Clock } from 'lucide-react';
-import { orderService } from '../../../services/orderService';
+import { merchantService, merchantOrderApi } from '../../../services/merchantService';
 import { formatVND, formatRelativeTime } from '../../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../../utils/constants';
 import type { Order } from '../../../types/order';
@@ -12,20 +12,36 @@ const OrderInbox: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [storeId, setStoreId] = useState<string | null>(null);
 
   useEffect(() => {
-    orderService.getMerchantOrders('rest-001').then(setOrders);
+    const loadOrders = async () => {
+      try {
+        const stores = await merchantService.getStores();
+        const activeStoreId = stores[0]?.id;
+        setStoreId(activeStoreId || null);
+        if (!activeStoreId) return;
+        const result = await merchantOrderApi.getOrders(activeStoreId);
+        setOrders(result as Order[]);
+      } catch (error: any) {
+        message.error(error?.message || 'Khong tai duoc don hang merchant');
+      }
+    };
+
+    loadOrders();
   }, []);
 
   const handleAccept = async (orderId: string) => {
-    await orderService.updateOrderStatus(orderId, 'confirmed', 'Quán xác nhận');
+    if (!storeId) return;
+    await merchantOrderApi.accept(storeId, orderId);
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o));
     message.success('Đã xác nhận đơn hàng');
   };
 
   const handleReject = async () => {
     if (!rejectModal) return;
-    await orderService.updateOrderStatus(rejectModal, 'cancelled', rejectReason);
+    if (!storeId) return;
+    await merchantOrderApi.reject(storeId, rejectModal, rejectReason);
     setOrders(prev => prev.map(o => o.id === rejectModal ? { ...o, status: 'cancelled', cancelReason: rejectReason } : o));
     message.warning('Đã từ chối đơn hàng');
     setRejectModal(null);
