@@ -20,8 +20,8 @@ const OrderHistoryPage: React.FC = () => {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
 
-  const activeOrders = orders.filter(o => !['delivered', 'cancelled', 'refunded'].includes(o.status));
-  const pastOrders = orders.filter(o => ['delivered', 'cancelled', 'refunded'].includes(o.status));
+  const activeOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status));
+  const pastOrders = orders.filter(o => ['delivered', 'cancelled'].includes(o.status));
 
   const OrderCard: React.FC<{ order: Order }> = ({ order }) => (
     <Card style={{ borderRadius: 12, marginBottom: 12 }} hoverable onClick={() => navigate(`/customer/order/${order.id}`)}>

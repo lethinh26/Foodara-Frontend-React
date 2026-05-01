@@ -42,7 +42,7 @@ function translateMessage(msg: string): string {
 class ApiClient {
   private baseUrl: string;
   private isRefreshing = false;
-  private refreshQueue: Array<() => void> = [];
+  private refreshQueue: Array<(token: string | null) => void> = [];
 
   constructor() {
     this.baseUrl = env.apiBaseUrl;
@@ -78,13 +78,11 @@ class ApiClient {
     if (response.status === 401 && originalRequest) {
       const newToken = await this.handleTokenRefresh();
       if (newToken) {
-        this.updateTokenInStore(newToken);
-        
         const retryHeaders = {
           ...originalRequest.init.headers as Record<string, string>,
           'Authorization': `Bearer ${newToken}`,
         };
-        const retryResponse = await fetch(originalRequest.url, {
+        const retryResponse = await this.safeFetch(originalRequest.url, {
           ...originalRequest.init,
           headers: retryHeaders,
         });
@@ -111,12 +109,9 @@ class ApiClient {
   }
 
   private async handleTokenRefresh(): Promise<string | null> {
-    // If already refreshing, wait for it to complete
     if (this.isRefreshing) {
       return new Promise((resolve) => {
-        this.refreshQueue.push(() => {
-          resolve(this.getToken());
-        });
+        this.refreshQueue.push(resolve);
       });
     }
 
@@ -124,15 +119,22 @@ class ApiClient {
 
     try {
       const newToken = await refreshAccessToken();
-      
-      // Notify all waiting requests
-      this.refreshQueue.forEach(callback => callback());
-      this.refreshQueue = [];
-      
+      if (newToken) {
+        this.updateTokenInStore(newToken);
+      }
+      this.flushRefreshQueue(newToken);
       return newToken;
+    } catch {
+      this.flushRefreshQueue(null);
+      return null;
     } finally {
       this.isRefreshing = false;
     }
+  }
+
+  private flushRefreshQueue(token: string | null): void {
+    this.refreshQueue.forEach((callback) => callback(token));
+    this.refreshQueue = [];
   }
 
   private updateTokenInStore(token: string): void {
@@ -159,22 +161,18 @@ class ApiClient {
     }
   }
 
-  private async safeFetch(url: string, init: RequestInit, enableRetry = true): Promise<Response> {
+  private async safeFetch(url: string, init: RequestInit): Promise<Response> {
     try {
-      const response = await fetch(url, {
+      return await fetch(url, {
         ...init,
         credentials: 'include',
       });
-      
-      if (enableRetry) {
-        return response;
-      }
-      return response;
-    } catch (err: any) {
-      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+    } catch (err: unknown) {
+      if (err instanceof TypeError && err.message.includes('fetch')) {
         throw new ApiError(0, 0, 'Không thể kết nối đến server. Kiểm tra lại kết nối mạng.');
       }
-      throw new ApiError(0, 0, err?.message || 'Lỗi kết nối mạng');
+      const message = err instanceof Error ? err.message : 'Lỗi kết nối mạng';
+      throw new ApiError(0, 0, message);
     }
   }
 

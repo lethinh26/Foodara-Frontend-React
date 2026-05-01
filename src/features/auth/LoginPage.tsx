@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal, Avatar } from 'antd';
+import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal } from 'antd';
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
 import { loginSuccess, selectIsAuthenticated } from '../../store/authSlice';
@@ -119,7 +119,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
         navigate(from, { replace: true });
       }
     } catch (err: any) {
-      message.error(err?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+      message.error(err?.message || 'Dang ky that bai. Vui long thu lai.');
     } finally {
       setLoading(false);
     }
@@ -224,102 +224,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
         )}
       </Card>
 
-      {/* Modal Custom theo giao diện hình ảnh */}
       <Modal
-        open={isMerchantExistsModalOpen}
-        onCancel={handleReject}
-        footer={null}
-        closable={false}
-        centered
-        width={400}
-        bodyStyle={{ padding: 0 }}
-        modalRender={(node) => (
-          <div style={{
-            border: '1px solid #1fde6c',
-            borderRadius: 8,
-            backgroundColor: '#fff',
-            overflow: 'hidden',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
-          }}>
-            {node}
-          </div>
-        )}
+        title="Lien ket tai khoan Foodara"
+        open={!!linkCandidate}
+        onOk={handleLinkRole}
+        onCancel={() => setLinkCandidate(null)}
+        okText={`Lien ket ${roleLabels[role]}`}
+        cancelText="Khong, de sau"
+        confirmLoading={linking}
       >
-        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <Title level={4} style={{ color: '#1fde6c', marginTop: 0, marginBottom: 24 }}>
-            Bạn có muốn liên kết tài khoản không?
-          </Title>
-
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 24 }}>
-            <div style={{
-              border: '4px solid #1fde6c',
-              borderRadius: '50%',
-              padding: 4,
-              display: 'inline-flex'
-            }}>
-              <Avatar
-                size={110}
-                src={pendingUser?.avatarUrl}
-                alt='none'
-              />
-            </div>
-          </div>
-          <div style={{
-            border: '2px solid #1fde6c',
-            borderRadius: 4,
-            padding: '16px',
-            textAlign: 'left',
-            marginBottom: 32
-          }}>
-            {/* <div style={{ textAlign: 'right', marginBottom: 12 }}>
-              <Text type="secondary" style={{ fontSize: 13, color: '#333' }}>
-                Received: Just now
-              </Text>
-            </div> */}
-            <div style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 16, color: '#333' }}>
-                Username: <span style={{ fontWeight: 'normal' }}>{pendingUser?.fullName || 'N/A'}</span>
-              </Text>
-            </div>
-            <div>
-              <Text strong style={{ fontSize: 16, color: '#333' }}>
-                Email: <span style={{ fontWeight: 'normal' }}>{pendingUser?.email || 'N/A'}</span>
-              </Text>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 16 }}>
-            <Button
-              loading={loading}
-              block
-              onClick={handleAccept}
-              style={{
-                height: 50,
-                border: '3px solid #3ffc0b',
-                color: '#1fde6c',
-                fontWeight: 'bold',
-                fontSize: 16,
-                borderRadius: 4
-              }}
-            >
-              Đồng ý
-            </Button>
-            <Button
-              block
-              onClick={handleReject}
-              style={{
-                height: 50,
-                border: '3px solid #6A0000', // Đỏ sậm
-                color: '#C00000',
-                fontWeight: 'bold',
-                fontSize: 16,
-                borderRadius: 4
-              }}
-            >
-              Từ chối!
-            </Button>
-          </div>
-        </div>
+        <Text>
+          Email nay da ton tai va mat khau khop. Ban co muon dung chung tai khoan nay
+          cho vai tro {roleLabels[role]} khong?
+        </Text>
       </Modal>
     </div>
   );

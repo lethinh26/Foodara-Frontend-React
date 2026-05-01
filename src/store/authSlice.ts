@@ -27,6 +27,7 @@ const authSlice = createSlice({
       state.token = action.payload.token;
       state.isAuthenticated = true;
       state.role = action.payload.user.role;
+      localStorage.setItem('foodara:lastRole', action.payload.user.role);
     },
     logout(state) {
       state.user = null;
@@ -34,6 +35,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.role = null;
       state.devices = [];
+      localStorage.removeItem('foodara:lastRole');
     },
     updateProfile(state, action: PayloadAction<Partial<User>>) {
       if (state.user) {
@@ -48,11 +50,13 @@ const authSlice = createSlice({
     },
     switchRole(state, action: PayloadAction<UserRole>) {
       state.role = action.payload;
+      localStorage.setItem('foodara:lastRole', action.payload);
     },
     setUser (state, action: PayloadAction<User | null>) {
       state.user = action.payload;
       state.isAuthenticated = !!action.payload;
       state.role = action.payload?.role || null;
+      if (action.payload?.role) localStorage.setItem('foodara:lastRole', action.payload.role);
     },
     setToken (state, action: PayloadAction<string | null>) {
       state.token = action.payload;

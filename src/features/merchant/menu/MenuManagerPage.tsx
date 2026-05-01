@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Tag, Modal, Form, Input, InputNumber, Switch, Typography, Space, message, Tabs, Select } from 'antd';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-import { restaurantService } from '../../../services/restaurantService';
+import { merchantService, merchantMenuApi } from '../../../services/merchantService';
 import { formatVND } from '../../../utils/format';
 import type { MenuItem, MenuCategory } from '../../../types/menu';
 
@@ -16,8 +16,63 @@ const MenuManagerPage: React.FC = () => {
   const [catModal, setCatModal] = useState(false);
 
   useEffect(() => {
-    Promise.all([restaurantService.getMenuCategories('rest-001'), restaurantService.getMenuItems('rest-001')])
-      .then(([cats, itms]) => { setCategories(cats); setItems(itms); setLoading(false); });
+    const loadMenu = async () => {
+      try {
+        const stores = await merchantService.getStores();
+        const storeId = stores[0]?.id;
+        if (!storeId) {
+          setLoading(false);
+          return;
+        }
+        const [cats, itms] = await Promise.all([
+          merchantMenuApi.getCategories(storeId),
+          merchantMenuApi.getItems(storeId),
+        ]);
+        setCategories(cats.map((cat: any) => ({
+          id: cat.id,
+          restaurantId: cat.storeId || storeId,
+          name: cat.name,
+          description: cat.description || '',
+          sortOrder: cat.displayOrder || 0,
+          isActive: cat.isActive ?? true,
+          itemCount: 0,
+        })));
+        setItems(itms.map((item: any) => ({
+          id: item.id,
+          restaurantId: item.storeId || storeId,
+          categoryId: item.categoryId || '',
+          name: item.name,
+          description: item.description || '',
+          image: item.imageUrl || '/logo/secondary_logo.png',
+          basePrice: Number(item.basePrice || 0),
+          originalPrice: Number(item.basePrice || 0),
+          pricing: { discountedPrice: Number(item.basePrice || 0), estimatedDiscountAmount: 0 },
+          sizes: [],
+          toppingGroups: [],
+          variants: [],
+          comboOptions: [],
+          isAvailable: item.isAvailable ?? true,
+          isPopular: item.isPopular ?? false,
+          isNew: item.isNew ?? false,
+          isBestSeller: false,
+          maxQuantity: item.maxQuantityPerOrder || 99,
+          preparationTime: 15,
+          calories: 0,
+          tags: [],
+          soldCount: item.totalSold || 0,
+          rating: Number(item.avgRating || 0),
+          reviewCount: item.totalRatings || 0,
+          createdAt: item.createdAt || new Date().toISOString(),
+          updatedAt: item.updatedAt || new Date().toISOString(),
+        })));
+      } catch (error: any) {
+        message.error(error?.message || 'Kh?ng t?i ???c th?c ??n merchant');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMenu();
   }, []);
 
   const handleToggleItem = (itemId: string) => {

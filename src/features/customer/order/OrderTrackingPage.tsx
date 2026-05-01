@@ -25,7 +25,7 @@ const OrderTrackingPage: React.FC = () => {
   if (!order) return <div style={{ textAlign: 'center', padding: 48 }}><Text>Không tìm thấy đơn hàng</Text></div>;
 
   const currentStep = statusSteps.indexOf(order.status);
-  const isCancelled = order.status === 'cancelled' || order.status === 'refunded';
+  const isCancelled = order.status === 'cancelled';
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: 24 }} className="animate-fade-in">

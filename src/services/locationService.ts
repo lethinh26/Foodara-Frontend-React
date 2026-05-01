@@ -34,10 +34,7 @@ export interface WardItem {
 // ── Types for backend location APIs ──
 export interface CoverageCheckResponse {
   covered: boolean;
-  cityId: string | null;
   cityName: string | null;
-  zoneId: string | null;
-  zoneName: string | null;
   surgeMultiplier: number | null;
 }
 
@@ -93,9 +90,9 @@ export const locationService = {
   async checkCoverage(lat: number, lng: number): Promise<CoverageCheckResponse> {
     if (env.isMockMode || !env.apiBaseUrl) {
       if (lat > 10.5 && lat < 11.2 && lng > 106.3 && lng < 107.0) {
-        return { covered: true, cityId: 'city-hcm', cityName: 'Hồ Chí Minh', zoneId: 'zone-1', zoneName: 'HCM Trung tâm', surgeMultiplier: 1.0 };
+        return { covered: true, cityName: 'Hồ Chí Minh', surgeMultiplier: 1.0 };
       }
-      return { covered: false, cityId: null, cityName: null, zoneId: null, zoneName: null, surgeMultiplier: null };
+      return { covered: false, cityName: null, surgeMultiplier: null };
     }
 
     return apiClient.get<CoverageCheckResponse>('/v1/locations/check-coverage', {

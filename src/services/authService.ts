@@ -3,7 +3,22 @@ import { env } from '../config/env';
 import { delay } from '../utils/helpers';
 import { mockCustomer, mockMerchant, mockAdmin } from '../mocks/users';
 import toast from 'react-hot-toast';
-import { type User, type LoginCredentials, type RegisterData, type UserRole } from '../types/user';
+import type { User, LoginCredentials, RegisterData, UserRole } from '../types/user';
+
+
+export interface RegisterCheckResponse {
+  exists: boolean;
+  passwordMatched: boolean;
+  canLinkRole: boolean;
+  targetRole: string;
+  roles: string[];
+}
+
+interface TokenResponse {
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
 
 export interface UserProfileResponse {
   id: string;
@@ -32,8 +47,8 @@ export interface AddressResponse {
   recipientPhone: string;
   addressLine: string;
   ward: string;
-  districtId: string;
-  cityId: string;
+  districtName: string;
+  cityName: string;
   latitude: number;
   longitude: number;
   deliveryNote: string;
@@ -47,8 +62,8 @@ export interface AddressRequest {
   recipientPhone?: string;
   addressLine: string;
   ward?: string;
-  districtId?: string;
-  cityId?: string;
+  districtName?: string;
+  cityName?: string;
   latitude?: number;
   longitude?: number;
   deliveryNote?: string;
@@ -62,14 +77,18 @@ export interface SessionResponse {
   current: boolean;
 }
 
-function mapProfileToUser(profile: UserProfileResponse): User {
+function normalizeRole(role: UserRole): string {
+  return role.toUpperCase();
+}
+
+function mapProfileToUser(profile: UserProfileResponse, role: UserRole = 'customer'): User {
   return {
     id: profile.id,
     email: profile.email,
     fullName: profile.fullName,
     phone: profile.phone || '',
     avatar: profile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.fullName}`,
-    role: 'customer',
+    role,
     status: (profile.status as User['status']) || 'active',
     emailVerified: profile.emailVerified,
     phoneVerified: profile.phoneVerified,
@@ -80,25 +99,25 @@ function mapProfileToUser(profile: UserProfileResponse): User {
 }
 
 
-async function fetchProfileWithToken(token: string): Promise<User> {
+async function fetchProfileWithToken(token: string, role: UserRole = 'customer'): Promise<User> {
   const response = await fetch(`${env.apiBaseUrl}/v1/users/me`, {
     method: 'GET',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
   });
   const body = await response.json();
-  console.log(body);
 
   if (body.code === 1000 && body.result) {
-    return mapProfileToUser(body.result as UserProfileResponse);
+    return mapProfileToUser(body.result as UserProfileResponse, role);
   }
   throw new Error(body.message || 'Failed to fetch profile');
 }
 
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<{ user: User; token: string }> {
+  async login(credentials: LoginCredentials, role: UserRole = 'customer'): Promise<{ user: User; token: string }> {
     if (env.isMockMode) {
       await delay(800);
       const { email } = credentials;
@@ -112,7 +131,7 @@ export const authService = {
     }
 
 
-    const result = await apiClient.post<{ accessToken: string; tokenType: string; expiresIn: number }>(
+    const result = await apiClient.post<TokenResponse>(
       '/v1/auth/login',
       {
         username: credentials.email,
@@ -121,7 +140,7 @@ export const authService = {
     );
 
     const tempToken = result.accessToken;
-    const profile = await fetchProfileWithToken(tempToken);
+    const profile = await fetchProfileWithToken(tempToken, role);
 
     return {
       user: profile,
@@ -129,23 +148,23 @@ export const authService = {
     };
   },
 
-  async register(data: RegisterData): Promise<{ user: User; token: string }> {
-    // accessToken, tokenType, expiresIn
-    // Refresh token HttpOnly cookie
-    console.log("abc");
-
-    const result = await apiClient.post<{ accessToken: string; tokenType: string; expiresIn: number }>(
+  async register(data: RegisterData, role: UserRole = 'customer'): Promise<{ user: User; token: string }> {
+    const result = await apiClient.post<TokenResponse>(
       '/v1/auth/register',
-      { email: data.email, password: data.password, fullName: data.fullName, phone: data.phone, avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + data.fullName }
+      {
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+        phone: data.phone,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.fullName}`,
+      }
     );
-    console.log(result);
-
 
     const tempToken = result.accessToken;
 
     let profile: User;
     try {
-      profile = await fetchProfileWithToken(tempToken);
+      profile = await fetchProfileWithToken(tempToken, role);
     } catch {
       toast.error('Vui lòng đăng nhập lại.');
       setTimeout(() => {
@@ -158,6 +177,40 @@ export const authService = {
       user: profile,
       token: tempToken,
     };
+  },
+
+  async checkRegister(data: RegisterData, role: UserRole): Promise<RegisterCheckResponse> {
+    if (env.isMockMode) {
+      await delay(300);
+      return { exists: false, passwordMatched: false, canLinkRole: false, targetRole: normalizeRole(role), roles: [] };
+    }
+    return apiClient.post<RegisterCheckResponse>(`/v1/auth/register/check?role=${normalizeRole(role)}`, {
+      email: data.email,
+      password: data.password,
+      fullName: data.fullName,
+      phone: data.phone,
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.fullName}`,
+    });
+  },
+
+  async linkRole(credentials: LoginCredentials, role: UserRole): Promise<{ user: User; token: string }> {
+    if (env.isMockMode) {
+      await delay(500);
+      const user = role === 'merchant' ? mockMerchant : mockCustomer;
+      return { user: { ...user, role }, token: `mock-${role}-token` };
+    }
+
+    const result = await apiClient.post<TokenResponse>('/v1/auth/link-role', {
+      username: credentials.email,
+      password: credentials.password,
+      role: normalizeRole(role),
+    });
+    const profile = await fetchProfileWithToken(result.accessToken, role);
+    return { user: profile, token: result.accessToken };
+  },
+
+  async getProfileWithToken(token: string, role: UserRole = 'customer'): Promise<User> {
+    return fetchProfileWithToken(token, role);
   },
 
 

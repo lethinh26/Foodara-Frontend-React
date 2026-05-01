@@ -47,6 +47,7 @@ export interface VoucherCartPricing {
   totalDiscount: number;
   subtotalAfterVoucher: number;
   appliedPlatformVoucher: VoucherPricing | null;
+  appliedPlatformShipVoucher: VoucherPricing | null;
   appliedStoreVoucher: VoucherPricing | null;
   bestPlatformVoucher: VoucherPricing | null;
   bestStoreVoucher: VoucherPricing | null;
