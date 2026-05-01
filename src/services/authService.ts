@@ -32,6 +32,14 @@ export interface UserProfileResponse {
   createdAt: string;
 }
 
+export interface UserResponse {
+  userId: string;
+  email: string;
+  fullName: string;
+  checkMerchant: boolean;
+  avatarUrl: string;
+}
+
 export interface AddressResponse {
   id: string;
   label: string;
@@ -125,8 +133,8 @@ export const authService = {
 
     const result = await apiClient.post<TokenResponse>(
       '/v1/auth/login',
-      { 
-        username: credentials.email, 
+      {
+        username: credentials.email,
         password: credentials.password,
       }
     );
@@ -213,6 +221,16 @@ export const authService = {
     }
     const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
     return mapProfileToUser(profile);
+  },
+
+  async getUserResponse(data: { email: string, password: string }): Promise<UserResponse> {
+    const result = await apiClient.get<UserResponse>(`/v1/users/check-merchant/${data.email}/${data.password}`);
+    return result;
+  },
+
+  async postUserRole(data: {userId: string, userRole: string}){
+    const result = await apiClient.post<UserRole>("/v1/auth/user-role", data)
+    return result
   },
 
   async updateProfile(data: { fullName?: string; phone?: string }): Promise<User> {

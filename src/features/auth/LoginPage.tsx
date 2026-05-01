@@ -4,7 +4,7 @@ import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal } 
 import { Mail, Lock, User, Phone } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
 import { loginSuccess, selectIsAuthenticated } from '../../store/authSlice';
-import { authService } from '../../services/authService';
+import { authService, type UserResponse } from '../../services/authService';
 import type { UserRole } from '../../types/user';
 
 const { Title, Text } = Typography;
@@ -12,6 +12,7 @@ const { Title, Text } = Typography;
 interface LoginPageProps {
   role: UserRole;
 }
+
 
 export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const [linking, setLinking] = useState(false);
   const [linkCandidate, setLinkCandidate] = useState<{ email: string; password: string; fullName: string; phone: string } | null>(null);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
-  
+
   const roleLabels: Record<UserRole, string> = {
     customer: 'Khách hàng',
     merchant: 'Đối tác quán',
@@ -36,6 +37,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, from]);
+
+
 
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
