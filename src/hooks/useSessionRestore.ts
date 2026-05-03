@@ -1,35 +1,25 @@
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/useStore';
-import { setUser, setToken } from '../store/authSlice';
-import { refreshAccessToken } from '../utils/tokenRefresh';
+import { loginSuccess, logout } from '../store/authSlice';
 import { authService } from '../services/authService';
 
 
 export function useSessionRestore() {
   const dispatch = useAppDispatch();
-  const currentToken = useAppSelector(state => state.auth.token);
+  const isAuthenticated = useAppSelector(state => state.auth.isAuthenticated);
 
   useEffect(() => {
-    if (currentToken) {
-      return;
-    }
+    if (isAuthenticated) return;
 
     const restoreSession = async () => {
       try {
-        const newAccessToken = await refreshAccessToken();
-
-        if (newAccessToken) {
-          dispatch(setToken(newAccessToken));
-
-          const role = localStorage.getItem('foodara:lastRole') as 'customer' | 'merchant' | 'admin' | null;
-          const user = await authService.getProfileWithToken(newAccessToken, role || 'customer');
-          dispatch(setUser(user));
-        }
+        const user = await authService.getProfile();
+        dispatch(loginSuccess({ user }));
       } catch {
-        //
+        dispatch(logout());
       }
     };
 
     restoreSession();
-  }, [currentToken, dispatch]);
+  }, [isAuthenticated, dispatch]);
 }
