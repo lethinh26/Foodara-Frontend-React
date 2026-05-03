@@ -21,7 +21,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
 
-  // State cho modal liên kết tài khoản (dùng chung cho mọi role)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [pendingCheckResult, setPendingCheckResult] = useState<RegisterCheckResponse | null>(null);
   const [pendingFormData, setPendingFormData] = useState<{ email: string; password: string; fullName: string; phone: string } | null>(null);
@@ -51,16 +50,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
-      // BUG#1 Fix: Kiểm tra user có role phù hợp với portal đang login không
       if (role !== 'admin') {
         const check = await authService.checkRegister(
-          { email: values.email, password: values.password, fullName: 'temp', phone: '0000000000' },
+          { email: values.email, password: values.password, fullName: '', phone: '' },
           role
         );
         if (check.exists && check.passwordMatched) {
           const normalizedRole = role.toUpperCase();
-          const upperRoles = check.roles.map((r: string) => r.toUpperCase());
-          if (!upperRoles.includes(normalizedRole)) {
+          if (!check.roles.includes(normalizedRole)) {
             message.error(
               `Tài khoản này không có quyền ${roleLinkLabels[role] || role}. Vui lòng đăng ký để liên kết vai trò.`
             );
@@ -91,43 +88,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
 
     setLoading(true);
     try {
-      // Bước 1: Kiểm tra email đã tồn tại chưa qua API chuẩn
       const checkResult = await authService.checkRegister(values, role);
-      console.log('[DEBUG checkRegister]', JSON.stringify(checkResult, null, 2));
 
       if (checkResult.exists) {
         if (checkResult.canLinkRole) {
-          // Email đã tồn tại, password đúng, có thể liên kết role mới → hiện modal
           setPendingCheckResult(checkResult);
           setPendingFormData(values);
           setIsLinkModalOpen(true);
           setLoading(false);
           return;
         } else if (!checkResult.passwordMatched) {
-          // Email tồn tại nhưng mật khẩu sai
           message.error('Email đã được đăng ký. Nếu đây là tài khoản của bạn, vui lòng nhập đúng mật khẩu để liên kết.');
           setLoading(false);
           return;
         } else {
-          const normalizedRole = role.toUpperCase();
-          const upperRoles = checkResult.roles.map((r: string) => r.toUpperCase());
-          const alreadyHasRole = upperRoles.includes(normalizedRole);
-          if (alreadyHasRole) {
-            message.error(`Tài khoản này đã có vai trò ${roleLinkLabels[role] || role}. Vui lòng đăng nhập.`);
-            setActiveTab('login');
-          } else {
-            message.error('Không thể liên kết tài khoản. Vui lòng thử lại hoặc liên hệ hỗ trợ.');
-          }
+          message.error(`Tài khoản này đã có vai trò ${roleLinkLabels[role] || role}. Vui lòng đăng nhập.`);
+          setActiveTab('login');
           setLoading(false);
           return;
         }
       }
 
-      // Bước 2: Email chưa tồn tại → đăng ký mới bình thường
       const result = await authService.register(values, role);
 
-      // BUG#2 Fix: Nếu đăng ký merchant, dùng linkRole API chuẩn thay vì postUserRole cũ
-      // Backend register mặc định gán CUSTOMER, cần link thêm MERCHANT
       if (role === 'merchant') {
         const linkResult = await authService.linkRole(
           { email: values.email, password: values.password },
@@ -150,7 +133,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     }
   };
 
-  // Xử lý khi user đồng ý liên kết tài khoản
   const handleLinkAccept = async () => {
     if (!pendingFormData) return;
     setLoading(true);
@@ -161,7 +143,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
       );
       dispatch(loginSuccess({ user: { ...result.user, role } }));
       message.success('Liên kết tài khoản thành công!');
-      // BUG#3 Fix: Cleanup state để tránh data cũ nếu navigate chậm
       setIsLinkModalOpen(false);
       setPendingCheckResult(null);
       setPendingFormData(null);
@@ -181,7 +162,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     setPendingFormData(null);
   };
 
-  // Lấy danh sách role hiện tại để hiển thị trong modal
   const existingRolesText = pendingCheckResult?.roles
     ?.map((r) => {
       const map: Record<string, string> = { CUSTOMER: 'Khách hàng', MERCHANT: 'Đối tác quán', ADMIN: 'Quản trị viên' };
@@ -268,7 +248,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
         )}
       </Card>
 
-      {/* Modal liên kết tài khoản — dùng chung cho merchant & customer */}
       <Modal
         open={isLinkModalOpen}
         onCancel={handleLinkReject}
