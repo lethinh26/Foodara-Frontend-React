@@ -19,25 +19,13 @@ export const CustomerLayout: React.FC = () => {
   const cartCount = useAppSelector(selectCartCount);
   const unreadCount = useAppSelector(selectUnreadCount);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // const token = useAppSelector(useToke)
-
-  // useEffect(() => {
-  //   dispatch(setToken(""))
-  // })
   const handleLogout = async () => {
     try {
       await authService.logout();
-      
-      // Clear Redux state
-      dispatch(logout());
-      
-      // Clear localStorage
-      localStorage.removeItem('persist:foodara');
     } catch {
       // Even if API fails, still logout locally
-      dispatch(logout());
-      localStorage.removeItem('persist:foodara');
     }
+    dispatch(logout());
     navigate('/customer/login');
   };
 

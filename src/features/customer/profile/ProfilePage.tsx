@@ -390,19 +390,13 @@ const ProfilePage: React.FC = () => {
                               onOk: async () => {
                                 try {
                                   await authService.logout();
-                                  
                                   dispatch({ type: 'auth/logout' });
-                                  
-                                  localStorage.removeItem('persist:foodara');
-                                  
                                   message.success('Đã đăng xuất');
-                                  
                                   setTimeout(() => {
                                     window.location.href = '/customer/login';
                                   }, 500);
-                                } catch (err: any) {
+                                } catch {
                                   dispatch({ type: 'auth/logout' });
-                                  localStorage.removeItem('persist:foodara');
                                   window.location.href = '/customer/login';
                                 }
                               },

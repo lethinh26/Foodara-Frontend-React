@@ -32,17 +32,10 @@ export const MerchantLayout: React.FC = () => {
   const handleLogout = async () => {
     try {
       await authService.logout();
-      
-      // Clear Redux state
-      dispatch(logout());
-      
-      // Clear localStorage
-      localStorage.removeItem('persist:foodara');
     } catch {
       // Even if API fails, still logout locally
-      dispatch(logout());
-      localStorage.removeItem('persist:foodara');
     }
+    dispatch(logout());
     navigate('/merchant/login');
   };
 

@@ -1,5 +1,4 @@
 import { env } from '../config/env';
-import { refreshAccessToken } from '../utils/tokenRefresh';
 
 /**
  * Backend response format: { code: number, message: string, result: T }
@@ -10,7 +9,6 @@ interface BackendResponse<T> {
   result: T;
 }
 
-// ── Map backend error messages → Vietnamese ──
 const ERROR_MESSAGES: Record<string, string> = {
   'USER_EXISTED': 'Email đã được đăng ký',
   'USER_NOT_EXISTED': 'Tài khoản không tồn tại',
@@ -42,50 +40,24 @@ function translateMessage(msg: string): string {
 class ApiClient {
   private baseUrl: string;
   private isRefreshing = false;
-  private refreshQueue: Array<(token: string | null) => void> = [];
+  private refreshQueue: Array<(ok: boolean) => void> = [];
 
   constructor() {
     this.baseUrl = env.apiBaseUrl;
   }
 
-  private getToken(): string | null {
-    try {
-      const persisted = localStorage.getItem('persist:foodara');
-      if (persisted) {
-        const parsed = JSON.parse(persisted);
-        const auth = JSON.parse(parsed.auth || '{}');
-        return auth.token || null;
-      }
-    } catch {
-      //
-    }
-    return null;
-  }
-
   private buildHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
-    const headers: Record<string, string> = {
+    return {
       'Content-Type': 'application/json',
       ...extraHeaders,
     };
-    const token = this.getToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
   }
 
   private async handleResponse<T>(response: Response, originalRequest?: { url: string; init: RequestInit }): Promise<T> {
     if (response.status === 401 && originalRequest) {
-      const newToken = await this.handleTokenRefresh();
-      if (newToken) {
-        const retryHeaders = {
-          ...originalRequest.init.headers as Record<string, string>,
-          'Authorization': `Bearer ${newToken}`,
-        };
-        const retryResponse = await this.safeFetch(originalRequest.url, {
-          ...originalRequest.init,
-          headers: retryHeaders,
-        });
+      const refreshOk = await this.tryRefreshToken();
+      if (refreshOk) {
+        const retryResponse = await this.safeFetch(originalRequest.url, originalRequest.init);
         return this.handleResponse<T>(retryResponse);
       } else {
         this.logoutUser();
@@ -108,7 +80,7 @@ class ApiClient {
     return body.result;
   }
 
-  private async handleTokenRefresh(): Promise<string | null> {
+  private async tryRefreshToken(): Promise<boolean> {
     if (this.isRefreshing) {
       return new Promise((resolve) => {
         this.refreshQueue.push(resolve);
@@ -118,47 +90,30 @@ class ApiClient {
     this.isRefreshing = true;
 
     try {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        this.updateTokenInStore(newToken);
-      }
-      this.flushRefreshQueue(newToken);
-      return newToken;
+      const res = await fetch(`${this.baseUrl}/v1/auth/refresh-token`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const ok = res.ok;
+      this.refreshQueue.forEach((cb) => cb(ok));
+      this.refreshQueue = [];
+      return ok;
     } catch {
-      this.flushRefreshQueue(null);
-      return null;
+      this.refreshQueue.forEach((cb) => cb(false));
+      this.refreshQueue = [];
+      return false;
     } finally {
       this.isRefreshing = false;
     }
   }
 
-  private flushRefreshQueue(token: string | null): void {
-    this.refreshQueue.forEach((callback) => callback(token));
-    this.refreshQueue = [];
-  }
-
-  private updateTokenInStore(token: string): void {
-    try {
-      const persisted = localStorage.getItem('persist:foodara');
-      if (persisted) {
-        const parsed = JSON.parse(persisted);
-        const auth = JSON.parse(parsed.auth || '{}');
-        auth.token = token;
-        parsed.auth = JSON.stringify(auth);
-        localStorage.setItem('persist:foodara', JSON.stringify(parsed));
-      }
-    } catch (error) {
-      console.error('Failed to update token in store:', error);
-    }
-  }
-
   private logoutUser(): void {
-    try {
-      localStorage.removeItem('persist:foodara');
-      window.location.href = '/customer/login';
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+    fetch(`${this.baseUrl}/v1/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
+    window.location.href = '/customer/login';
   }
 
   private async safeFetch(url: string, init: RequestInit): Promise<Response> {

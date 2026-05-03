@@ -9,7 +9,7 @@ import notificationReducer from './notificationSlice';
 const persistConfig = {
   key: 'foodara',
   storage,
-  whitelist: ['auth', 'cart', 'favorite'],
+  whitelist: ['cart'],
 };
 
 const rootReducer = combineReducers({
