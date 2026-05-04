@@ -1,8 +1,9 @@
-import React from 'react';
-import { Card, Row, Col, Typography, DatePicker } from 'antd';
+import React, { useEffect } from 'react';
+import { Card, Row, Col, Typography, DatePicker, message } from 'antd';
 import { ShoppingBag, DollarSign, Clock, CheckCircle2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Line, CartesianGrid, Legend } from 'recharts';
 import { formatVND } from '../../../utils/format';
+import { merchantReportApi, merchantService } from '../../../services/merchantService';
 
 const { Title, Text } = Typography;
 
@@ -21,6 +22,16 @@ const statsCards = [
 ];
 
 const MerchantDashboard: React.FC = () => {
+
+  useEffect(() => {
+    try {
+      const orders = merchantReportApi.orders().then((m : any) => console.log(m.id))      
+      
+    } catch (error : any) {
+      message.error(error.message || "")
+    }
+  }, [])
+
   return (
     <div className="animate-fade-in">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>

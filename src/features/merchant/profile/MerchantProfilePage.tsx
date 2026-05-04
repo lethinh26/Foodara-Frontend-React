@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Form, Input, Switch, Button, Typography, message, Space, Tag, Avatar } from 'antd';
 import { Store, Clock, Phone, MapPin } from 'lucide-react';
+import { merchantService } from '../../../services/merchantService';
 
 const { Title, Text } = Typography;
 
@@ -15,6 +16,12 @@ const MerchantProfilePage: React.FC = () => {
     coverImage: 'https://images.unsplash.com/photo-1503764654157-72d979d9af2f?w=800',
     commissionRate: 20, settlementCycle: 'Hàng tuần', bankName: 'Vietcombank', bankAccount: '****5678',
   };
+
+  useEffect(() => {
+    const result = merchantService.getProfile();
+    console.log(result);
+    
+  }, [])
 
   return (
     <div className="animate-fade-in">

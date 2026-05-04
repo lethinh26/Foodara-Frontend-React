@@ -14,6 +14,9 @@ export const env = {
 
   analyticsKey: import.meta.env.VITE_ANALYTICS_KEY || '',
 
+  uploadPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET,
+  apiUrl: import.meta.env.VITE_CLOUDINARY_API_URL,
+
   get hasMapProvider(): boolean {
     return !!this.mapboxToken;
   },
