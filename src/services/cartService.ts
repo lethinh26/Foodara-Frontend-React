@@ -239,7 +239,6 @@ export const cartService = {
       const unitPrice = getMockUnitPrice(payload);
       const sortedOptionIds = [...(payload.optionItemIds || [])].sort().join(',');
 
-      // Check for existing item with same menuItemId + options + note to stack
       const existingItem = mockSnapshot.items.find(item => {
         if (item.menuItemId !== (payload.menuItemId ?? '')) return false;
         const existingOptionIds = [

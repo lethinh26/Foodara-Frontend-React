@@ -208,46 +208,54 @@ const RestaurantDetailPage: React.FC = () => {
         </div>
       </div>
 
-      <Card style={{ marginBottom: 20, borderRadius: 12 }}>
+      <Card style={{ marginBottom: 20, borderRadius: 16, border: 'none', boxShadow: 'var(--shadow-md)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Space>
-            <Ticket size={18} color="var(--primary)" />
-            <Text strong>Voucher của quán ({storeVouchers.length})</Text>
-          </Space>
-          <Button onClick={() => setVoucherModalOpen(true)}>Xem tất cả voucher</Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Ticket size={18} color="#fff" />
+            </div>
+            <div>
+              <Text strong style={{ fontSize: 15 }}>Voucher của quán</Text>
+              <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{storeVouchers.length} voucher khả dụng</Text>
+            </div>
+          </div>
+          <Button type="link" onClick={() => setVoucherModalOpen(true)} style={{ fontWeight: 600, padding: 0 }}>Xem tất cả →</Button>
         </div>
         {storeVouchers.length === 0 ? (
-          <Text type="secondary" style={{ marginTop: 12, display: 'block' }}>Quán này chưa có voucher khả dụng.</Text>
+          <Text type="secondary" style={{ marginTop: 16, display: 'block', textAlign: 'center', padding: '20px 0' }}>Quán này chưa có voucher khả dụng.</Text>
         ) : (
-          <div style={{ marginTop: 12, display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, scrollSnapType: 'x mandatory' }}>
+          <div style={{ marginTop: 16, display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, scrollSnapType: 'x mandatory' }}>
             {storeVouchers.filter(v => v.scope === 'store').map(voucher => (
-              <Card key={voucher.id} size="small" style={{ borderRadius: 10, borderLeft: `4px solid ${voucher.scope === 'platform' ? 'var(--primary)' : 'var(--secondary)'}`, minWidth: 280, flex: '0 0 auto', scrollSnapAlign: 'start' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start'}}>
-                  <div>
-                    <Text strong>{voucher.title}</Text>
-                    <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{voucher.conditions.join(' • ')}</Text>
-                    {voucher.potentialDiscount > 0 && (
-                      <Text style={{ display: 'block', color: 'var(--success)', fontSize: 12 }}>
-                        Ước tính tiết kiệm: {formatVND(voucher.potentialDiscount)}
-                      </Text>
+              <div key={voucher.id} style={{ minWidth: 300, flex: '0 0 auto', scrollSnapAlign: 'start', display: 'flex', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-soft)', background: 'var(--surface)', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <div style={{ width: 80, background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px 8px', position: 'relative' }}>
+                  <Text style={{ color: '#fff', fontWeight: 700, fontSize: voucher.type === 'fixed' ? 14 : 18, lineHeight: 1.1, textAlign: 'center' }}>
+                    {voucher.type === 'fixed' ? `${Math.round(voucher.discountValue / 1000)}K` : `${voucher.discountValue}%`}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>{voucher.type === 'free_ship' ? 'Freeship' : 'Giảm'}</Text>
+                  <div style={{ position: 'absolute', right: -6, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)' }} />
+                </div>
+                <div style={{ flex: 1, padding: '12px 14px', borderLeft: '2px dashed var(--border-soft)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
+                    <Text strong style={{ fontSize: 13, lineHeight: 1.3 }}>{voucher.title}</Text>
+                    {voucher.isCollected
+                      ? <Tag color="success" style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px' }}>Đã lưu</Tag>
+                      : <Tag color="warning" style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px' }}>Mới</Tag>}
+                  </div>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 11, marginBottom: 8 }}>{voucher.conditions.join(' • ')}</Text>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <Button size="small" type="text" onClick={() => setVoucherDetail(voucher)} style={{ fontSize: 12, padding: '0 8px', height: 28, color: 'var(--primary)' }}>Chi tiết</Button>
+                    {!voucher.isCollected && (
+                      <Button size="small" type="primary" loading={collectingVoucherId === voucher.id} onClick={() => void handleCollectVoucher(voucher)}
+                        style={{ fontSize: 12, borderRadius: 6, height: 28, fontWeight: 600 }}>
+                        Thu thập
+                      </Button>
                     )}
                   </div>
-                  {voucher.isCollected ? <Tag color="green">Đã thu thập</Tag> : <Tag color="gold">Chưa thu thập</Tag>}
                 </div>
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <Button size="small" onClick={() => setVoucherDetail(voucher)}>Chi tiết</Button>
-                  {!voucher.isCollected && (
-                    <Button
-                      size="small"
-                      type="primary"
-                      loading={collectingVoucherId === voucher.id}
-                      onClick={() => void handleCollectVoucher(voucher)}
-                    >
-                      Thu thập
-                    </Button>
-                  )}
-                </div>
-              </Card>
+              </div>
             ))}
           </div>
         )}
@@ -436,75 +444,112 @@ const RestaurantDetailPage: React.FC = () => {
       <Modal
         open={voucherModalOpen}
         onCancel={() => setVoucherModalOpen(false)}
-        footer={<Button type="primary" onClick={() => setVoucherModalOpen(false)}>Đóng</Button>}
-        title="Voucher có thể thu thập"
+        footer={null}
+        title={null}
+        closable
+        styles={{ body: { padding: 0 } }}
+        modalRender={(node) => <div style={{ borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>{node}</div>}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', padding: '20px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Ticket size={22} color="#fff" />
+            <Title level={5} style={{ color: '#fff', margin: 0 }}>Voucher có thể thu thập</Title>
+          </div>
+          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13 }}>{storeVouchers.length} voucher khả dụng</Text>
+        </div>
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 450, overflowY: 'auto' }}>
           {storeVouchers.map(voucher => (
-            <Card key={voucher.id} size="small" style={{ borderRadius: 10 }}>
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-    }}
-  >
-    <div style={{ flex: 1 }}>
-      <Text strong>{voucher.title}</Text>
-      <Text style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 12 }}>
-        {voucher.code}
-      </Text>
-      <Text style={{ display: 'block', fontSize: 12 }}>
-        {voucher.description}
-      </Text>
-    </div>
-
-    <div
-      style={{
-        marginTop: 12,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}
-    >
-      <Button size="small" onClick={() => setVoucherDetail(voucher)}>
-        Chi tiết
-      </Button>
-
-      <Button
-        size="small"
-        type="primary"
-        disabled={voucher.isCollected}
-        loading={collectingVoucherId === voucher.id}
-        onClick={() => void handleCollectVoucher(voucher)}
-        // style={{ color: "#" }}
-      >
-        {voucher.isCollected ? 'Đã thu thập' : 'Thu thập'}
-      </Button>
-    </div>
-  </div>
-</Card>
+            <div key={voucher.id} style={{ display: 'flex', borderRadius: 12, border: '1px solid var(--border-soft)', transition: 'box-shadow 0.2s', flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+            >
+              <div style={{ width: 76, borderRadius: '12px 0 0 12px', background: voucher.isCollected ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)' : 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '10px 6px', position: 'relative', flexShrink: 0 }}>
+                <Text style={{ color: '#fff', fontWeight: 700, fontSize: voucher.type === 'fixed' ? 13 : 16, lineHeight: 1.1, textAlign: 'center', wordBreak: 'keep-all' }}>
+                  {voucher.type === 'fixed' ? `${Math.round(voucher.discountValue / 1000)}K` : `${voucher.discountValue}%`}
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9, textTransform: 'uppercase' }}>{voucher.type === 'free_ship' ? 'Freeship' : 'Giảm'}</Text>
+                <div style={{ position: 'absolute', right: -6, top: '30%', width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)' }} />
+                <div style={{ position: 'absolute', right: -6, bottom: '30%', width: 12, height: 12, borderRadius: '50%', background: 'var(--surface)' }} />
+              </div>
+              <div style={{ flex: 1, padding: '12px 14px', borderLeft: '2px dashed var(--border-soft)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <Text strong style={{ fontSize: 13 }}>{voucher.title}</Text>
+                    <Tag color={voucher.isCollected ? 'success' : 'warning'} style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 6px' }}>
+                      {voucher.isCollected ? 'Đã lưu' : 'Mới'}
+                    </Tag>
+                  </div>
+                  <Text style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 11 }}>{voucher.code}</Text>
+                  <Text style={{ display: '-webkit-box', fontSize: 12, marginTop: 2, overflow: 'hidden', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{voucher.description}</Text>
+                </div>
+                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Button size="small" type="text" onClick={() => setVoucherDetail(voucher)} style={{ fontSize: 12, padding: '0 8px', height: 28, color: 'var(--primary)' }}>Chi tiết</Button>
+                  <Button size="small" type="primary" disabled={voucher.isCollected} loading={collectingVoucherId === voucher.id} onClick={() => void handleCollectVoucher(voucher)}
+                    style={{ fontSize: 12, borderRadius: 6, height: 28, fontWeight: 600 }}>
+                    {voucher.isCollected ? 'Đã thu thập' : 'Thu thập'}
+                  </Button>
+                </div>
+              </div>
+            </div>
           ))}
+        </div>
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-soft)', textAlign: 'right' }}>
+          <Button type="primary" onClick={() => setVoucherModalOpen(false)} style={{ borderRadius: 8, fontWeight: 600 }}>Đóng</Button>
         </div>
       </Modal>
 
       <Modal
         open={!!voucherDetail}
         onCancel={() => setVoucherDetail(null)}
-        footer={<Button type="primary" onClick={() => setVoucherDetail(null)}>Đã hiểu</Button>}
-        title={voucherDetail?.title || 'Chi tiết voucher'}
+        footer={null}
+        closable
+        centered
+        width={420}
+        styles={{ body: { padding: 0 } }}
+        modalRender={(node) => <div style={{ borderRadius: 16, overflow: 'hidden', background: 'var(--surface)', boxShadow: 'var(--shadow-xl)' }}>{node}</div>}
       >
         {voucherDetail && (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Text><Text strong>Mã:</Text> {voucherDetail.code}</Text>
-            <Text><Text strong>Loại:</Text> {voucherDetail.scope === 'platform' ? 'Voucher sàn' : 'Voucher quán'}</Text>
-            <Text><Text strong>Điều kiện:</Text> {voucherDetail.conditions.join(' • ')}</Text>
-            <Text><Text strong>Đơn tối thiểu:</Text> {formatVND(voucherDetail.minOrderValue)}</Text>
-            <Text><Text strong>Giá trị ưu đãi tối đa:</Text> {voucherDetail.type === 'percentage' ? `${voucherDetail.discountValue}%` : formatVND(voucherDetail.discountValue)}</Text>
-            {voucherDetail.potentialDiscount > 0 && (
-              <Text style={{ color: 'var(--success)' }}><Text strong>Ước tính tiết kiệm:</Text> {formatVND(voucherDetail.potentialDiscount)}</Text>
-            )}
-          </Space>
+          <>
+            <div style={{ background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', padding: '24px', textAlign: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: 14, background: 'rgba(255,255,255,0.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Ticket size={28} color="#fff" />
+              </div>
+              <Title level={4} style={{ color: '#fff', margin: 0 }}>{voucherDetail.title}</Title>
+              <div style={{ display: 'inline-block', background: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: '4px 14px', marginTop: 8 }}>
+                <Text style={{ color: '#fff', fontWeight: 700, fontSize: 16, letterSpacing: 2 }}>{voucherDetail.code}</Text>
+              </div>
+            </div>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: 12, borderRadius: 10, background: 'var(--surface-soft)', textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Giảm</Text>
+                  <Text strong style={{ fontSize: 18, color: 'var(--secondary)' }}>
+                    {voucherDetail.type === 'percentage' ? `${voucherDetail.discountValue}%` : formatVND(voucherDetail.discountValue)}
+                  </Text>
+                </div>
+                <div style={{ padding: 12, borderRadius: 10, background: 'var(--surface-soft)', textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Đơn tối thiểu</Text>
+                  <Text strong style={{ fontSize: 15 }}>{formatVND(voucherDetail.minOrderValue)}</Text>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--secondary)', flexShrink: 0 }} />
+                  <Text style={{ fontSize: 13 }}>{voucherDetail.scope === 'platform' ? 'Voucher sàn Foodara' : 'Voucher từ cửa hàng'}</Text>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--secondary)', flexShrink: 0 }} />
+                  <Text style={{ fontSize: 13 }}>{voucherDetail.conditions.join(' • ')}</Text>
+                </div>
+              </div>
+              {voucherDetail.potentialDiscount > 0 && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)', marginBottom: 16 }}>
+                  <Text style={{ color: 'var(--success)', fontWeight: 600, fontSize: 13 }}>✨ Ước tính tiết kiệm: {formatVND(voucherDetail.potentialDiscount)}</Text>
+                </div>
+              )}
+              <Button type="primary" block size="large" onClick={() => setVoucherDetail(null)} style={{ borderRadius: 10, fontWeight: 600, height: 44 }}>Đã hiểu</Button>
+            </div>
+          </>
         )}
       </Modal>
     </div>

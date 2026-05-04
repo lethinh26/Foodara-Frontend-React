@@ -2,7 +2,6 @@ import { apiClient } from './apiClient';
 import { env } from '../config/env';
 import { delay } from '../utils/helpers';
 import { mockCustomer, mockMerchant, mockAdmin } from '../mocks/users';
-import toast from 'react-hot-toast';
 import type { User, LoginCredentials, RegisterData, UserRole } from '../types/user';
 
 
@@ -14,8 +13,7 @@ export interface RegisterCheckResponse {
   roles: string[];
 }
 
-interface TokenResponse {
-  accessToken: string;
+interface AuthResponse {
   tokenType: string;
   expiresIn: number;
 }
@@ -99,39 +97,21 @@ function mapProfileToUser(profile: UserProfileResponse, role: UserRole = 'custom
 }
 
 
-async function fetchProfileWithToken(token: string, role: UserRole = 'customer'): Promise<User> {
-  const response = await fetch(`${env.apiBaseUrl}/v1/users/me`, {
-    method: 'GET',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  const body = await response.json();
-
-  if (body.code === 1000 && body.result) {
-    return mapProfileToUser(body.result as UserProfileResponse, role);
-  }
-  throw new Error(body.message || 'Failed to fetch profile');
-}
-
 export const authService = {
-  async login(credentials: LoginCredentials, role: UserRole = 'customer'): Promise<{ user: User; token: string }> {
+  async login(credentials: LoginCredentials, role: UserRole = 'customer'): Promise<{ user: User }> {
     if (env.isMockMode) {
       await delay(800);
       const { email } = credentials;
       if (email.includes('merchant') || email.includes('quan')) {
-        return { user: mockMerchant, token: 'mock-merchant-token' };
+        return { user: mockMerchant };
       }
       if (email.includes('admin')) {
-        return { user: { ...mockAdmin }, token: 'mock-admin-token' };
+        return { user: { ...mockAdmin } };
       }
-      return { user: mockCustomer, token: 'mock-customer-token' };
+      return { user: mockCustomer };
     }
 
-
-    const result = await apiClient.post<TokenResponse>(
+    await apiClient.post<AuthResponse>(
       '/v1/auth/login',
       {
         username: credentials.email,
@@ -139,17 +119,17 @@ export const authService = {
       }
     );
 
-    const tempToken = result.accessToken;
-    const profile = await fetchProfileWithToken(tempToken, role);
-
-    return {
-      user: profile,
-      token: tempToken,
-    };
+    const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
+    return { user: mapProfileToUser(profile, role) };
   },
 
-  async register(data: RegisterData, role: UserRole = 'customer'): Promise<{ user: User; token: string }> {
-    const result = await apiClient.post<TokenResponse>(
+  async register(data: RegisterData, role: UserRole = 'customer'): Promise<{ user: User }> {
+    if (env.isMockMode) {
+      await delay(800);
+      return { user: mockCustomer };
+    }
+
+    await apiClient.post<AuthResponse>(
       '/v1/auth/register',
       {
         email: data.email,
@@ -160,23 +140,8 @@ export const authService = {
       }
     );
 
-    const tempToken = result.accessToken;
-
-    let profile: User;
-    try {
-      profile = await fetchProfileWithToken(tempToken, role);
-    } catch {
-      toast.error('Vui lòng đăng nhập lại.');
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 3000);
-      throw new Error('Vui lòng đăng nhập lại.');
-    }
-
-    return {
-      user: profile,
-      token: tempToken,
-    };
+    const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
+    return { user: mapProfileToUser(profile, role) };
   },
 
   async checkRegister(data: RegisterData, role: UserRole): Promise<RegisterCheckResponse> {
@@ -193,24 +158,20 @@ export const authService = {
     });
   },
 
-  async linkRole(credentials: LoginCredentials, role: UserRole): Promise<{ user: User; token: string }> {
+  async linkRole(credentials: LoginCredentials, role: UserRole): Promise<{ user: User }> {
     if (env.isMockMode) {
       await delay(500);
       const user = role === 'merchant' ? mockMerchant : mockCustomer;
-      return { user: { ...user, role }, token: `mock-${role}-token` };
+      return { user: { ...user, role } };
     }
 
-    const result = await apiClient.post<TokenResponse>('/v1/auth/link-role', {
+    await apiClient.post<AuthResponse>('/v1/auth/link-role', {
       username: credentials.email,
       password: credentials.password,
       role: normalizeRole(role),
     });
-    const profile = await fetchProfileWithToken(result.accessToken, role);
-    return { user: profile, token: result.accessToken };
-  },
-
-  async getProfileWithToken(token: string, role: UserRole = 'customer'): Promise<User> {
-    return fetchProfileWithToken(token, role);
+    const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
+    return { user: mapProfileToUser(profile, role) };
   },
 
 

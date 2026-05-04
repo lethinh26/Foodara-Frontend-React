@@ -72,6 +72,7 @@ const CheckoutPage: React.FC = () => {
     const [selectedSystemShipVoucherId, setSelectedSystemShipVoucherId] = useState<string | undefined>(undefined);
     const [voucherModal, setVoucherModal] = useState(false);
     const [voucherLoading, setVoucherLoading] = useState(false);
+    const [collectingVoucherId, setCollectingVoucherId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [note, setNote] = useState('');
 
@@ -238,6 +239,24 @@ const CheckoutPage: React.FC = () => {
         }
     }, [cartError]);
 
+
+
+    const handleCollectVoucherInCheckout = async (voucherId: string) => {
+        try {
+            setCollectingVoucherId(voucherId);
+            await voucherService.collectVoucher(voucherId);
+            message.success('Thu thập voucher thành công!');
+            // Refresh vouchers
+            if (restaurant.id) {
+                await syncVoucherPricing(restaurant.id, 'available');
+            }
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : 'Không thể thu thập voucher');
+        } finally {
+            setCollectingVoucherId(null);
+        }
+    };
+
     const estimateVoucherDiscount = (voucher: Voucher, sub: number, delFee: number) => {
         if (sub < voucher.minOrderValue) return 0;
         if (voucher.type === 'percentage') {
@@ -299,6 +318,60 @@ const CheckoutPage: React.FC = () => {
         }
     }, [bestPlatformVoucher?.voucherId, bestStoreVoucher?.voucherId, vouchers, selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId]);
 
+    const subtotal = cartTotal || cartItems.reduce((s, i) => s + i.totalPrice, 0);
+    const discountedSubtotal = cartVoucherDiscount > 0 ? cartTotalAfterVoucher : subtotal;
+    const deliveryFee = 15000;
+    const platformFee = Math.min(Math.max(discountedSubtotal * 0.03, 2000), 10000);
+    const selectedVoucherIds = [selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId].filter(Boolean) as string[];
+    const voucherDiscount = cartVoucherDiscount;
+    const total = Math.max(discountedSubtotal + deliveryFee + platformFee, 0);
+
+    const prevSubtotalRef = React.useRef(subtotal);
+    useEffect(() => {
+        if (!restaurant.id || !subtotal) return;
+        if (prevSubtotalRef.current === subtotal) return;
+        prevSubtotalRef.current = subtotal;
+        const timeout = setTimeout(() => {
+            let newStore = selectedStoreVoucherId;
+            let newDisc = selectedSystemDiscountVoucherId;
+            let newShip = selectedSystemShipVoucherId;
+            if (newStore) {
+                const sv = vouchers.find(v => v.id === newStore);
+                if (sv && subtotal < sv.minOrderValue) newStore = undefined;
+            }
+            if (newDisc) {
+                const dv = vouchers.find(v => v.id === newDisc);
+                if (dv && subtotal < dv.minOrderValue) newDisc = undefined;
+            }
+            if (newShip) {
+                const shv = vouchers.find(v => v.id === newShip);
+                if (shv && subtotal < shv.minOrderValue) newShip = undefined;
+            }
+            if (newStore !== selectedStoreVoucherId || newDisc !== selectedSystemDiscountVoucherId || newShip !== selectedSystemShipVoucherId) {
+                setSelectedStoreVoucherId(newStore);
+                setSelectedSystemDiscountVoucherId(newDisc);
+                setSelectedSystemShipVoucherId(newShip);
+            }
+            if (newStore || newDisc || newShip) {
+                void applySelectedVouchers(newStore, newDisc, newShip);
+            } else {
+                void syncVoucherPricing(restaurant.id!, 'available');
+            }
+        }, 600);
+        return () => clearTimeout(timeout);
+    }, [subtotal, restaurant.id]);
+
+    const discountSuggestion = (() => {
+        const collectedNotMet = vouchers.filter(v => v.isCollected && subtotal < v.minOrderValue);
+        if (collectedNotMet.length === 0) return null;
+        const best = collectedNotMet
+            .map(v => ({ v, gap: v.minOrderValue - subtotal }))
+            .filter(x => x.gap > 0)
+            .sort((a, b) => a.gap - b.gap)[0];
+        if (!best) return null;
+        return { gap: best.gap, voucher: best.v };
+    })();
+
     if (cartItems.length === 0) {
         return (
             <div style={{ maxWidth: 700, margin: '0 auto', padding: 24, textAlign: 'center' }}>
@@ -307,14 +380,6 @@ const CheckoutPage: React.FC = () => {
             </div>
         );
     }
-
-    const subtotal = cartTotal || cartItems.reduce((s, i) => s + i.totalPrice, 0);
-    const discountedSubtotal = cartVoucherDiscount > 0 ? cartTotalAfterVoucher : subtotal;
-    const deliveryFee = 15000;
-    const platformFee = Math.min(Math.max(discountedSubtotal * 0.03, 2000), 10000);
-    const selectedVoucherIds = [selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId].filter(Boolean) as string[];
-    const voucherDiscount = cartVoucherDiscount;
-    const total = Math.max(discountedSubtotal + deliveryFee + platformFee, 0);
 
     const handleOrder = async () => {
         setLoading(true);
@@ -380,12 +445,19 @@ const CheckoutPage: React.FC = () => {
     };
 
     return (
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: 24 }} className="animate-fade-in">
-            <Button type="text" icon={<ArrowLeft size={18} />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Quay lại</Button>
-            <Title level={4}>Thanh toán</Title>
+        <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 24px 100px' }} className="animate-fade-in">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                <Button type="text" icon={<ArrowLeft size={18} />} onClick={() => navigate(-1)} style={{ padding: '4px 0' }} />
+                <Title level={4} style={{ margin: 0 }}>Thanh toán</Title>
+            </div>
 
-            <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><MapPin size={18} color="var(--primary)" /><Text strong>Địa chỉ giao hàng</Text></div>
+            <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #FF6B6B 0%, #ee5a24 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <MapPin size={18} color="#fff" />
+                    </div>
+                    <Text strong style={{ fontSize: 15 }}>Địa chỉ giao hàng</Text>
+                </div>
                 <Select
                     value={selectedAddress || undefined}
                     onChange={(val: string) => { if (val === ADD_ADDRESS_VALUE) { openAddressModal(); } else { setSelectedAddress(val); } }}
@@ -403,8 +475,8 @@ const CheckoutPage: React.FC = () => {
                 {!selectedAddress && <Text type="warning" style={{ color: '#ff4d4f', marginTop: 8, display: 'block' }}>Vui lòng chọn địa chỉ giao hàng.</Text>}
             </Card>
 
-            <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-                <Text strong style={{ display: 'block', marginBottom: 12 }}>{restaurant.name}</Text>
+            <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
+                <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 15 }}>🍽️ {restaurant.name}</Text>
                 {cartItems.map(item => (
                     <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-soft)' }}>
                         <div style={{ flex: 1 }}>
@@ -446,6 +518,13 @@ const CheckoutPage: React.FC = () => {
                     </div>
                 ))}
                 <Input.TextArea value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú cho đơn hàng..." rows={2} style={{ marginTop: 12 }} />
+                {discountSuggestion && (
+                    <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(255,193,7,0.08)', border: '1px dashed rgba(255,193,7,0.4)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 12, color: '#e6a700' }}>
+                            💡 Mua thêm <Text strong style={{ color: '#e6a700', fontSize: 12 }}>{formatVND(discountSuggestion.gap)}</Text> để được <Text strong style={{ color: '#e6a700', fontSize: 12 }}>{discountSuggestion.voucher.title}</Text>
+                        </Text>
+                    </div>
+                )}
             </Card>
 
             {(minOrderAmount > 0 || !isStoreOpen || (cartValidation && !cartValidation.valid)) && (
@@ -464,22 +543,49 @@ const CheckoutPage: React.FC = () => {
                 </Card>
             )}
 
-            <Card style={{ marginBottom: 16, borderRadius: 12, cursor: 'pointer' }} onClick={() => setVoucherModal(true)}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    <Space><Ticket size={18} color="var(--secondary)" /><div>
-                        <Text strong>Voucher</Text>
-                        <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>Voucher quán: {selectedStoreVoucherId ? 'Đã chọn' : 'Chưa chọn'}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>Voucher hệ thống giảm giá: {selectedSystemDiscountVoucherId ? 'Đã chọn' : 'Chưa chọn'}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>Voucher hệ thống freeship: {selectedSystemShipVoucherId ? 'Đã chọn' : 'Chưa chọn'}</Text>
+            <Card style={{ marginBottom: 16, borderRadius: 14, cursor: 'pointer', border: selectedVoucherIds.length > 0 ? '1.5px solid var(--primary)' : '1px solid var(--border-soft)', transition: 'all 0.2s', boxShadow: selectedVoucherIds.length > 0 ? '0 2px 12px rgba(76,175,80,0.12)' : 'none' }}
+              onClick={() => setVoucherModal(true)}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Ticket size={20} color="#fff" />
                         </div>
-                    </div></Space>
-                    <div>{selectedVoucherIds.length > 0 ? <Tag color="green">Đang áp dụng {selectedVoucherIds.length} voucher</Tag> : <Text type="secondary">Chưa chọn voucher</Text>}</div>
+                        <div>
+                            <Text strong style={{ fontSize: 14 }}>Voucher & Khuyến mãi</Text>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+                                {[
+                                    { label: 'Quán', active: !!selectedStoreVoucherId },
+                                    { label: 'Giảm giá', active: !!selectedSystemDiscountVoucherId },
+                                    { label: 'Freeship', active: !!selectedSystemShipVoucherId },
+                                ].map(slot => (
+                                    <div key={slot.label} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 6, background: slot.active ? 'rgba(76,175,80,0.1)' : 'var(--surface-soft)', border: `1px solid ${slot.active ? 'rgba(76,175,80,0.3)' : 'var(--border-soft)'}` }}>
+                                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: slot.active ? 'var(--success)' : 'var(--text-tertiary)' }} />
+                                        <Text style={{ fontSize: 11, color: slot.active ? 'var(--success)' : 'var(--text-secondary)' }}>{slot.label}</Text>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        {selectedVoucherIds.length > 0 ? (
+                            <Tag color="success" style={{ margin: 0, fontWeight: 600 }}>{selectedVoucherIds.length} áp dụng</Tag>
+                        ) : (
+                            <Text type="secondary" style={{ fontSize: 12 }}>Chọn voucher →</Text>
+                        )}
+                    </div>
                 </div>
             </Card>
 
-            <Card style={{ marginBottom: 16, borderRadius: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><CreditCard size={18} color="var(--primary)" /><Text strong>Phương thức thanh toán</Text></div>
+            <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <CreditCard size={18} color="#fff" />
+                    </div>
+                    <Text strong style={{ fontSize: 15 }}>Phương thức thanh toán</Text>
+                </div>
                 <Radio.Group value={selectedPayment} onChange={e => setSelectedPayment(e.target.value)} style={{ width: '100%' }}>
                     <Space direction="vertical" style={{ width: '100%' }}>
                         {paymentMethods.map(pm => (
@@ -491,15 +597,30 @@ const CheckoutPage: React.FC = () => {
                 </Radio.Group>
             </Card>
 
-            <Card style={{ marginBottom: 24, borderRadius: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><ShieldCheck size={18} color="var(--primary)" /><Text strong>Chi tiết thanh toán</Text></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><Text>Tạm tính</Text><Text>{formatVND(subtotal)}</Text></div>
-                {voucherDiscount > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: 'var(--success)' }}><Text style={{ color: 'inherit' }}>Giảm voucher</Text><Text style={{ color: 'inherit' }}>-{formatVND(voucherDiscount)}</Text></div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><Text>Tạm tính sau voucher</Text><Text>{formatVND(discountedSubtotal)}</Text></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><Text>Phí giao hàng</Text><Text>{formatVND(deliveryFee)}</Text></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><Text>Phí nền tảng</Text><Text>{formatVND(platformFee)}</Text></div>
-                <Divider style={{ margin: '8px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text strong style={{ fontSize: 16 }}>Tổng cộng</Text><Text strong style={{ fontSize: 18, color: 'var(--primary)' }}>{formatVND(total)}</Text></div>
+            <Card style={{ marginBottom: 24, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ShieldCheck size={18} color="#fff" />
+                    </div>
+                    <Text strong style={{ fontSize: 15 }}>Chi tiết thanh toán</Text>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Tạm tính</Text><Text>{formatVND(subtotal)}</Text></div>
+                    {voucherDiscount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', borderRadius: 8, background: 'rgba(76,175,80,0.06)', border: '1px dashed rgba(76,175,80,0.25)' }}>
+                            <Text style={{ color: 'var(--success)', fontWeight: 500 }}>Giảm voucher</Text>
+                            <Text style={{ color: 'var(--success)', fontWeight: 600 }}>-{formatVND(voucherDiscount)}</Text>
+                        </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Sau voucher</Text><Text>{formatVND(discountedSubtotal)}</Text></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Phí giao hàng</Text><Text>{formatVND(deliveryFee)}</Text></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Phí nền tảng</Text><Text>{formatVND(platformFee)}</Text></div>
+                </div>
+                <Divider style={{ margin: '12px 0' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderRadius: 10, background: 'linear-gradient(135deg, rgba(76,175,80,0.06) 0%, rgba(56,142,60,0.1) 100%)' }}>
+                    <Text strong style={{ fontSize: 16 }}>Tổng cộng</Text>
+                    <Text strong style={{ fontSize: 20, color: 'var(--primary)' }}>{formatVND(total)}</Text>
+                </div>
             </Card>
 
             <Button
@@ -509,9 +630,11 @@ const CheckoutPage: React.FC = () => {
                 loading={loading || cartLoading}
                 onClick={handleOrder}
                 disabled={!selectedAddress || !isStoreOpen || (minOrderAmount > 0 && subtotal < minOrderAmount)}
-                style={{ height: 52, borderRadius: 12, fontWeight: 700, fontSize: 16 }}
+                style={{ height: 56, borderRadius: 14, fontWeight: 700, fontSize: 16, boxShadow: '0 4px 16px rgba(76,175,80,0.3)', letterSpacing: 0.3 }}
             >
-                Đặt hàng - {formatVND(total)}
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <ShieldCheck size={20} /> Đặt hàng · {formatVND(total)}
+                </span>
             </Button>
 
             <Modal open={voucherModal} onCancel={() => setVoucherModal(false)} title="Chọn voucher áp dụng" footer={<Button type="primary" onClick={() => setVoucherModal(false)}>Đóng</Button>} width={560}>
@@ -532,11 +655,17 @@ const CheckoutPage: React.FC = () => {
                                     const notCollected = !v.isCollected;
                                     return (
                                         <Radio key={v.id} value={v.id} disabled={est <= 0 || voucherLoading || notCollected}>
-                                            <Space direction="vertical" size={0}>
-                                                <Text strong>{v.title} {isBest && <Tag color="gold">Best</Tag>} {notCollected && <Tag color="orange">Chưa thu thập</Tag>}</Text>
-                                                <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
-                                                <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
-                                            </Space>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+                                                <Space direction="vertical" size={0} style={{ flex: 1 }}>
+                                                    <Text strong>{v.title} {isBest && <Tag color="gold">Best</Tag>} {notCollected && <Tag color="orange">Chưa thu thập</Tag>} {est <= 0 && v.isCollected && <Tag color="red">Chưa đủ điều kiện</Tag>}</Text>
+                                                    <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
+                                                    <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
+                                                </Space>
+                                                {notCollected && (
+                                                    <Button size="small" type="primary" loading={collectingVoucherId === v.id} onClick={(e) => { e.stopPropagation(); void handleCollectVoucherInCheckout(v.id); }}
+                                                        style={{ fontSize: 11, borderRadius: 6, height: 26, flexShrink: 0 }}>Thu thập</Button>
+                                                )}
+                                            </div>
                                         </Radio>);
                                 })}
                             </Space>
@@ -553,11 +682,17 @@ const CheckoutPage: React.FC = () => {
                                     const notCollected = !v.isCollected;
                                     return (
                                         <Radio key={v.id} value={v.id} disabled={est <= 0 || voucherLoading || notCollected}>
-                                            <Space direction="vertical" size={0}>
-                                                <Text strong>{v.title} {isBest && <Tag color="gold">Best</Tag>} {notCollected && <Tag color="orange">Chưa thu thập</Tag>}</Text>
-                                                <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
-                                                <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
-                                            </Space>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+                                                <Space direction="vertical" size={0} style={{ flex: 1 }}>
+                                                    <Text strong>{v.title} {isBest && <Tag color="gold">Best</Tag>} {notCollected && <Tag color="orange">Chưa thu thập</Tag>} {est <= 0 && v.isCollected && <Tag color="red">Chưa đủ điều kiện</Tag>}</Text>
+                                                    <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
+                                                    <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
+                                                </Space>
+                                                {notCollected && (
+                                                    <Button size="small" type="primary" loading={collectingVoucherId === v.id} onClick={(e) => { e.stopPropagation(); void handleCollectVoucherInCheckout(v.id); }}
+                                                        style={{ fontSize: 11, borderRadius: 6, height: 26, flexShrink: 0 }}>Thu thập</Button>
+                                                )}
+                                            </div>
                                         </Radio>);
                                 })}
                             </Space>
@@ -573,11 +708,17 @@ const CheckoutPage: React.FC = () => {
                                     const notCollected = !v.isCollected;
                                     return (
                                         <Radio key={v.id} value={v.id} disabled={est <= 0 || voucherLoading || notCollected}>
-                                            <Space direction="vertical" size={0}>
-                                                <Text strong>{v.title} {notCollected && <Tag color="orange">Chưa thu thập</Tag>}</Text>
-                                                <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
-                                                <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm phí ship ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
-                                            </Space>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+                                                <Space direction="vertical" size={0} style={{ flex: 1 }}>
+                                                    <Text strong>{v.title} {notCollected && <Tag color="orange">Chưa thu thập</Tag>} {est <= 0 && v.isCollected && <Tag color="red">Chưa đủ điều kiện</Tag>}</Text>
+                                                    <Text type="secondary" style={{ fontSize: 12 }}>{v.conditions.join(' • ')}</Text>
+                                                    <Text style={{ color: notCollected ? 'var(--warning)' : est > 0 ? 'var(--success)' : 'var(--danger)', fontSize: 12 }}>{notCollected ? 'Cần thu thập voucher trước khi sử dụng' : est > 0 ? `Ước tính giảm phí ship ${formatVND(est)}` : `Cần đơn tối thiểu ${formatVND(v.minOrderValue)}`}</Text>
+                                                </Space>
+                                                {notCollected && (
+                                                    <Button size="small" type="primary" loading={collectingVoucherId === v.id} onClick={(e) => { e.stopPropagation(); void handleCollectVoucherInCheckout(v.id); }}
+                                                        style={{ fontSize: 11, borderRadius: 6, height: 26, flexShrink: 0 }}>Thu thập</Button>
+                                                )}
+                                            </div>
                                         </Radio>);
                                 })}
                             </Space>

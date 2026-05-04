@@ -71,7 +71,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
       }
 
       const result = await authService.login(values, role);
-      dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+      dispatch(loginSuccess({ user: { ...result.user, role } }));
       message.success('Đăng nhập thành công!');
       navigate(from, { replace: true });
     } catch (err: unknown) {
@@ -133,13 +133,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
           { email: values.email, password: values.password },
           'merchant'
         );
-        dispatch(loginSuccess({ user: { ...linkResult.user, role }, token: linkResult.token }));
+        dispatch(loginSuccess({ user: { ...linkResult.user, role } }));
         message.success('Đăng ký thành công!');
         navigate(from, { replace: true });
         return;
       }
 
-      dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+      dispatch(loginSuccess({ user: { ...result.user, role } }));
       message.success('Đăng ký thành công!');
       navigate(from, { replace: true });
     } catch (err: unknown) {
@@ -159,7 +159,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
         { email: pendingFormData.email, password: pendingFormData.password },
         role
       );
-      dispatch(loginSuccess({ user: { ...result.user, role }, token: result.token }));
+      dispatch(loginSuccess({ user: { ...result.user, role } }));
       message.success('Liên kết tài khoản thành công!');
       // BUG#3 Fix: Cleanup state để tránh data cũ nếu navigate chậm
       setIsLinkModalOpen(false);
