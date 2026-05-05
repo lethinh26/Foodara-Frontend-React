@@ -1,7 +1,8 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { Spin } from 'antd';
 import { useAppSelector } from '../../hooks/useStore';
-import { selectIsAuthenticated, selectRole } from '../../store/authSlice';
+import { selectIsAuthenticated, selectRole, selectAuthStatus } from '../../store/authSlice';
 import type { UserRole } from '../../types/user';
 
 interface AuthGuardProps {
@@ -12,7 +13,16 @@ interface AuthGuardProps {
 export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) => {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const role = useAppSelector(selectRole);
+  const authStatus = useAppSelector(selectAuthStatus);
   const location = useLocation();
+
+  if (authStatus === 'idle' || authStatus === 'checking') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     const loginPath = requiredRole === 'customer' ? '/customer/login' : requiredRole === 'merchant' ? '/merchant/login' : '/admin/login';
@@ -25,3 +35,4 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
 
   return <>{children}</>;
 };
+

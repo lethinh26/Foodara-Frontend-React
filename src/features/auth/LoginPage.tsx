@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal, Avatar } from 'antd';
+import { Card, Form, Input, Button, Divider, Typography, message, Tabs, Modal, Avatar, Spin } from 'antd';
 import { Mail, Lock, User, Phone, Link2, UserCheck, X } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useStore';
-import { loginSuccess, selectIsAuthenticated } from '../../store/authSlice';
+import { loginSuccess, selectIsAuthenticated, selectAuthStatus } from '../../store/authSlice';
 import { authService, type RegisterCheckResponse } from '../../services/authService';
 import type { UserRole } from '../../types/user';
 
@@ -26,6 +26,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
   const [pendingFormData, setPendingFormData] = useState<{ email: string; password: string; fullName: string; phone: string } | null>(null);
 
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const authStatus = useAppSelector(selectAuthStatus);
 
   const roleLabels: Record<UserRole, string> = {
     customer: 'Khách hàng',
@@ -45,6 +46,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, from]);
+
+  if (authStatus === 'idle' || authStatus === 'checking') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background)' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
 
 
   const handleLogin = async (values: { email: string; password: string }) => {
