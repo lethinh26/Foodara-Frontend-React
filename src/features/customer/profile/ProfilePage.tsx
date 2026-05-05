@@ -290,7 +290,7 @@ const ProfilePage: React.FC = () => {
                 Thêm địa chỉ mới
               </Button>
               {loadingAddresses ? (
-                <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="Đang tải..." /></div>
+                <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
               ) : addresses.length === 0 ? (
                 <Card style={{ borderRadius: 12, textAlign: 'center', padding: 40 }}>
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có địa chỉ. Thêm địa chỉ giao hàng để đặt món nhanh hơn." />
@@ -348,7 +348,7 @@ const ProfilePage: React.FC = () => {
           children: (
             <div>
               {loadingSessions ? (
-                <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="Đang tải..." /></div>
+                <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
               ) : sessions.length === 0 ? (
                 <Card style={{ borderRadius: 12, textAlign: 'center', padding: 40 }}>
                   <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không có phiên đăng nhập nào." />

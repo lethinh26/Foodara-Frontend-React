@@ -1,7 +1,7 @@
 import React from 'react';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import viVN from 'antd/locale/vi_VN';
 import { Toaster } from 'react-hot-toast';
 import { store, persistor } from '../store';
@@ -16,10 +16,16 @@ const SessionManager: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+const PersistLoading = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+    <Spin size="large" />
+  </div>
+);
+
 const App: React.FC = () => {
   return (
     <Provider store={store}>
-      <PersistGate loading={null} persistor={persistor}>
+      <PersistGate loading={<PersistLoading />} persistor={persistor}>
         <SessionManager>
           <ConfigProvider theme={antdTheme} locale={viVN}>
             <AppRouter />

@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Spin } from 'antd';
 import { CustomerLayout } from '../layouts/CustomerLayout';
 import { MerchantLayout } from '../layouts/MerchantLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
@@ -56,7 +57,7 @@ const Unauthorized = () => (
 
 const Loading = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
-    <div className="animate-pulse" style={{ color: 'var(--primary)', fontSize: 16 }}>Đang tải...</div>
+    <Spin size="large" />
   </div>
 );
 
