@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Tag, Typography, Space, Button, Tabs, Rate, Divider, Badge, Spin, Empty, Modal, Input, Radio, Checkbox, message, Tooltip } from 'antd';
+import { Card, Tag, Typography, Space, Button, Tabs, Rate, Badge, Spin, Empty, Modal, Input, message, Tooltip } from 'antd';
 import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft, Ticket } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
 import { addCartItem, fetchCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
@@ -38,10 +38,53 @@ const RestaurantDetailPage: React.FC = () => {
   const [selectedToppings, setSelectedToppings] = useState<Record<string, string[]>>({});
   const [itemNote, setItemNote] = useState('');
   const [addingToCart, setAddingToCart] = useState(false);
+  const [activeCategoryId, setActiveCategoryId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('menu');
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const categoryNavRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void dispatch(fetchCart());
   }, [dispatch]);
+
+  useEffect(() => {
+    const validCats = categories.filter(c => menuItems.some(i => i.categoryId === c.id));
+    if (validCats.length > 0 && !activeCategoryId) {
+      setActiveCategoryId(validCats[0].id);
+    }
+  }, [categories, menuItems, activeCategoryId]);
+
+  useEffect(() => {
+    const refs = categoryRefs.current;
+    const entries = Object.entries(refs).filter(([, el]) => el != null);
+    if (entries.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (observed) => {
+        const visible = observed.filter(e => e.isIntersecting);
+        if (visible.length > 0) {
+          // Pick the topmost visible section
+          visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          const topId = visible[0].target.getAttribute('data-cat-id');
+          if (topId) setActiveCategoryId(topId);
+        }
+      },
+      { rootMargin: '-80px 0px -60% 0px', threshold: 0.1 },
+    );
+
+    entries.forEach(([, el]) => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, [categories, menuItems, loading]);
+
+  const scrollToCategory = useCallback((catId: string) => {
+    setActiveCategoryId(catId);
+    const el = categoryRefs.current[catId];
+    if (el) {
+      const offset = 128; // header (64) + fixed nav (48) + gap (16)
+      const top = el.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -186,25 +229,69 @@ const RestaurantDetailPage: React.FC = () => {
 
   const cartTotal = useMemo(() => cartItems.reduce((s, i) => s + i.totalPrice, 0), [cartItems]);
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.quantity, 0), [cartItems]);
+  const storeOnlyVouchers = useMemo(() => storeVouchers.filter(v => v.scope === 'store'), [storeVouchers]);
 
   if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
   if (!restaurant) return <Empty description="Không tìm thấy quán ăn" />;
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 100px' }} className="animate-fade-in">
-      <div style={{ position: 'relative', height: 240, borderRadius: '0 0 16px 16px', overflow: 'hidden', marginBottom: 24 }}>
+      {/* Hero Section — Cover Image with Logo Overlay */}
+      <div style={{ position: 'relative', height: 300, borderRadius: '0 0 20px 20px', overflow: 'hidden', marginBottom: 24 }}>
         <img src={restaurant.coverImage} alt={restaurant.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)' }} />
-        <Button type="text" icon={<ArrowLeft size={20} color="#fff" />} onClick={() => navigate(-1)} style={{ position: 'absolute', top: 16, left: 16 }} />
-        <Button type="text" icon={<Heart size={20} color={isFav ? '#F44336' : '#fff'} fill={isFav ? '#F44336' : 'none'} />} onClick={toggleFavorite} style={{ position: 'absolute', top: 16, right: 16 }} />
-        <div style={{ position: 'absolute', bottom: 20, left: 24 }}>
-          <Title level={3} style={{ color: '#fff', margin: 0 }}>{restaurant.name}</Title>
-          <Space style={{ marginTop: 8 }}>
-            <Tag color="green"><Star size={12} /> {restaurant.rating} ({restaurant.reviewCount})</Tag>
-            <Tag><MapPin size={12} /> {formatDistance(restaurant.distance)}</Tag>
-            <Tag><Clock size={12} /> {formatETA(restaurant.estimatedDeliveryTime)}</Tag>
-            <Tag><Truck size={12} /> {formatVND(restaurant.deliveryFee)}</Tag>
-          </Space>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 45%, rgba(0,0,0,0.1) 70%, transparent 100%)' }} />
+
+        {/* Back & Favorite buttons */}
+        <Button type="text" icon={<ArrowLeft size={20} color="#fff" />} onClick={() => navigate(-1)}
+          style={{ position: 'absolute', top: 16, left: 16, background: 'rgba(0,0,0,0.35)', borderRadius: 10, width: 40, height: 40, backdropFilter: 'blur(8px)' }} />
+        <Button type="text" icon={<Heart size={20} color={isFav ? '#F44336' : '#fff'} fill={isFav ? '#F44336' : 'none'} />} onClick={toggleFavorite}
+          style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.35)', borderRadius: 10, width: 40, height: 40, backdropFilter: 'blur(8px)' }} />
+
+        {/* Logo + Info overlay on cover */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '20px 24px', display: 'flex', alignItems: 'flex-end', gap: 16 }}>
+          {/* Logo */}
+          <div style={{
+            width: 68, height: 68, borderRadius: 14, overflow: 'hidden',
+            border: '3px solid rgba(255,255,255,0.9)', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+            flexShrink: 0, background: '#fff',
+          }}>
+            {restaurant.logo ? (
+              <img src={restaurant.logo} alt={restaurant.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{
+                width: '100%', height: '100%',
+                background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 26, fontWeight: 700, color: '#fff',
+              }}>
+                {restaurant.name.charAt(0)}
+              </div>
+            )}
+          </div>
+
+          {/* Info text */}
+          <div style={{ flex: 1, minWidth: 0, paddingBottom: 2 }}>
+            <Title level={3} style={{ color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>{restaurant.name}</Title>
+            {restaurant.description && (
+              <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden', marginTop: 2 }}>
+                {restaurant.description}
+              </Text>
+            )}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              <Tag style={{ margin: 0, borderRadius: 6, fontWeight: 600, background: 'rgba(76,175,80,0.85)', color: '#fff', border: 'none' }}>
+                <Star size={11} style={{ marginRight: 2 }} /> {restaurant.rating} ({restaurant.reviewCount})
+              </Tag>
+              <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
+                <MapPin size={11} style={{ marginRight: 2 }} /> {formatDistance(restaurant.distance)}
+              </Tag>
+              <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
+                <Clock size={11} style={{ marginRight: 2 }} /> {formatETA(restaurant.estimatedDeliveryTime)}
+              </Tag>
+              <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
+                <Truck size={11} style={{ marginRight: 2 }} /> {formatVND(restaurant.deliveryFee)}
+              </Tag>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -216,16 +303,16 @@ const RestaurantDetailPage: React.FC = () => {
             </div>
             <div>
               <Text strong style={{ fontSize: 15 }}>Voucher của quán</Text>
-              <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{storeVouchers.length} voucher khả dụng</Text>
+              <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{storeOnlyVouchers.length} voucher khả dụng</Text>
             </div>
           </div>
           <Button type="link" onClick={() => setVoucherModalOpen(true)} style={{ fontWeight: 600, padding: 0 }}>Xem tất cả →</Button>
         </div>
-        {storeVouchers.length === 0 ? (
+        {storeOnlyVouchers.length === 0 ? (
           <Text type="secondary" style={{ marginTop: 16, display: 'block', textAlign: 'center', padding: '20px 0' }}>Quán này chưa có voucher khả dụng.</Text>
         ) : (
           <div style={{ marginTop: 16, display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, scrollSnapType: 'x mandatory' }}>
-            {storeVouchers.filter(v => v.scope === 'store').map(voucher => (
+            {storeOnlyVouchers.map(voucher => (
               <div key={voucher.id} style={{ minWidth: 300, flex: '0 0 auto', scrollSnapAlign: 'start', display: 'flex', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-soft)', background: 'var(--surface)', transition: 'transform 0.2s, box-shadow 0.2s', cursor: 'pointer' }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
@@ -261,7 +348,65 @@ const RestaurantDetailPage: React.FC = () => {
         )}
       </Card>
 
-      <Tabs defaultActiveKey="menu" items={[
+      {/* Fixed Category Nav — shows when scrolled past hero */}
+      {activeTab === 'menu' && (() => {
+        const validCats = categories.filter(c => menuItems.some(i => i.categoryId === c.id));
+        if (validCats.length === 0) return null;
+        return (
+          <div
+            ref={categoryNavRef}
+            style={{
+              position: 'fixed', top: 64, left: 0, right: 0, zIndex: 90,
+              background: '#fff', borderBottom: '1px solid var(--border-soft)',
+              padding: '10px 24px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            }}
+          >
+            <div style={{
+              maxWidth: 1280, margin: '0 auto',
+              display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
+              msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch',
+            }}>
+              {validCats.map(cat => {
+                const isActive = activeCategoryId === cat.id;
+                const itemCount = menuItems.filter(i => i.categoryId === cat.id).length;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => scrollToCategory(cat.id)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '6px 14px', borderRadius: 20, cursor: 'pointer',
+                      border: isActive ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                      background: isActive ? 'rgba(76,175,80,0.08)' : 'transparent',
+                      color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: isActive ? 600 : 400, fontSize: 13,
+                      whiteSpace: 'nowrap', flexShrink: 0,
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {cat.name}
+                    <span style={{
+                      fontSize: 11, padding: '0 5px', borderRadius: 10,
+                      background: isActive ? 'var(--primary)' : 'var(--border-soft)',
+                      color: isActive ? '#fff' : 'var(--text-secondary)',
+                      lineHeight: '18px', fontWeight: 600,
+                    }}>
+                      {itemCount}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+      {/* Spacer for fixed nav */}
+      {activeTab === 'menu' && categories.some(c => menuItems.some(i => i.categoryId === c.id)) && (
+        <div style={{ height: 48 }} />
+      )}
+
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
         {
           key: 'menu', label: 'Thực đơn',
           children: (
@@ -270,7 +415,12 @@ const RestaurantDetailPage: React.FC = () => {
                 const items = menuItems.filter(i => i.categoryId === cat.id);
                 if (items.length === 0) return null;
                 return (
-                  <div key={cat.id} style={{ marginBottom: 32 }}>
+                  <div
+                    key={cat.id}
+                    ref={el => { categoryRefs.current[cat.id] = el; }}
+                    data-cat-id={cat.id}
+                    style={{ marginBottom: 32, scrollMarginTop: 128 }}
+                  >
                     <Title level={5} style={{ marginBottom: 16 }}>{cat.name}</Title>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {items.map(item => (
@@ -368,74 +518,170 @@ const RestaurantDetailPage: React.FC = () => {
         </div>
       )}
 
-      <Modal open={!!selectedItem} onCancel={() => setSelectedItem(null)} footer={null} width={520} title={selectedItem?.name} centered>
+      <Modal
+        open={!!selectedItem}
+        onCancel={() => setSelectedItem(null)}
+        footer={null}
+        width={520}
+        title={null}
+        centered
+        styles={{ body: { padding: 0 } }}
+        modalRender={(node) => <div style={{ borderRadius: 16, overflow: 'hidden', background: 'var(--surface)' }}>{node}</div>}
+      >
         {selectedItem && (
           <div>
-            <img src={selectedItem.image} alt={selectedItem.name} style={{ width: '100%', height: 200, objectFit: 'cover', borderRadius: 12, marginBottom: 16 }} />
-            <Paragraph type="secondary">{selectedItem.description}</Paragraph>
-
-            {selectedItem.sizes.length > 0 && (
-              <div style={{ marginBottom: 16 }}>
-                <Text strong>Chon size:</Text>
-                <Radio.Group value={selectedSizeId} onChange={e => setSelectedSizeId(e.target.value)} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                  {selectedItem.sizes.map(s => (
-                    <Radio key={s.id} value={s.id}>
-                      {s.name} {s.priceAdjustment !== 0 && <Text type="secondary">({s.priceAdjustment > 0 ? '+' : ''}{formatVND(s.priceAdjustment)})</Text>}
-                    </Radio>
-                  ))}
-                </Radio.Group>
+            {/* Item hero image */}
+            <div style={{ position: 'relative', height: 220, overflow: 'hidden' }}>
+              <img src={selectedItem.image} alt={selectedItem.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)' }} />
+              <div style={{ position: 'absolute', bottom: 16, left: 20, right: 20 }}>
+                <Title level={4} style={{ color: '#fff', margin: 0, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{selectedItem.name}</Title>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13 }}>{selectedItem.description}</Text>
               </div>
-            )}
-
-            {selectedItem.toppingGroups.map(group => (
-              <div key={group.id} style={{ marginBottom: 16 }}>
-                <Text strong>{group.name}</Text>{group.required && <Tag color="red" style={{ marginLeft: 8 }}>Bat buoc</Tag>}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                  {group.maxSelect === 1 ? (
-                    <Radio.Group value={selectedToppings[group.id]?.[0]} onChange={e => setSelectedToppings(prev => ({ ...prev, [group.id]: [e.target.value] }))}>
-                      {group.options.filter(o => o.isAvailable).map(opt => (
-                        <Radio key={opt.id} value={opt.id} style={{ display: 'block', marginBottom: 4 }}>
-                          {opt.name} {opt.price > 0 && <Text type="secondary">(+{formatVND(opt.price)})</Text>}
-                        </Radio>
-                      ))}
-                    </Radio.Group>
-                  ) : (
-                    group.options.filter(o => o.isAvailable).map(opt => (
-                      <Checkbox key={opt.id} checked={selectedToppings[group.id]?.includes(opt.id)} onChange={e => {
-                        setSelectedToppings(prev => {
-                          const current = prev[group.id] || [];
-                          return { ...prev, [group.id]: e.target.checked ? [...current, opt.id] : current.filter(x => x !== opt.id) };
-                        });
-                      }}>
-                        {opt.name} {opt.price > 0 && <Text type="secondary">(+{formatVND(opt.price)})</Text>}
-                      </Checkbox>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-
-            <div style={{ marginBottom: 16 }}>
-              <Text strong>Ghi chú cho quán:</Text>
-              <Input.TextArea value={itemNote} onChange={e => setItemNote(e.target.value)} placeholder="VD: Ít cay, không hành..." rows={2} style={{ marginTop: 8 }} />
             </div>
 
-            <Divider />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Button shape="circle" icon={<Minus size={16} />} onClick={() => setItemQty(Math.max(1, itemQty - 1))} disabled={itemQty <= 1} />
-                <Text strong style={{ fontSize: 16, minWidth: 24, textAlign: 'center' }}>{itemQty}</Text>
-                <Button shape="circle" icon={<Plus size={16} />} onClick={() => setItemQty(Math.min(selectedItem.maxQuantity, itemQty + 1))} disabled={itemQty >= selectedItem.maxQuantity} />
+            <div style={{ padding: '16px 20px 20px' }}>
+              {/* Sizes */}
+              {selectedItem.sizes.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text strong style={{ fontSize: 15 }}>Chọn size</Text>
+                    <Tag color="processing" style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px', borderRadius: 4 }}>Bắt buộc</Tag>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {selectedItem.sizes.map(s => (
+                      <div
+                        key={s.id}
+                        onClick={() => setSelectedSizeId(s.id)}
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                          border: selectedSizeId === s.id ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                          background: selectedSizeId === s.id ? 'rgba(76,175,80,0.06)' : 'transparent',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{
+                            width: 18, height: 18, borderRadius: '50%',
+                            border: selectedSizeId === s.id ? '5px solid var(--primary)' : '2px solid var(--border)',
+                            transition: 'all 0.15s',
+                          }} />
+                          <Text style={{ fontWeight: selectedSizeId === s.id ? 600 : 400 }}>{s.name}</Text>
+                        </div>
+                        {s.priceAdjustment !== 0 && (
+                          <Text type="secondary" style={{ fontSize: 13 }}>{s.priceAdjustment > 0 ? '+' : ''}{formatVND(s.priceAdjustment)}</Text>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Topping Groups */}
+              {selectedItem.toppingGroups.map(group => (
+                <div key={group.id} style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text strong style={{ fontSize: 15 }}>{group.name}</Text>
+                    {group.required && <Tag color="error" style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px', borderRadius: 4 }}>Bắt buộc</Tag>}
+                    {!group.required && <Text type="secondary" style={{ fontSize: 12 }}>Tùy chọn</Text>}
+                    {group.maxSelect > 1 && <Text type="secondary" style={{ fontSize: 12 }}>(chọn tối đa {group.maxSelect})</Text>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {group.options.filter(o => o.isAvailable).map(opt => {
+                      const isSelected = group.maxSelect === 1
+                        ? selectedToppings[group.id]?.[0] === opt.id
+                        : selectedToppings[group.id]?.includes(opt.id);
+
+                      const handleClick = () => {
+                        if (group.maxSelect === 1) {
+                          setSelectedToppings(prev => ({ ...prev, [group.id]: [opt.id] }));
+                        } else {
+                          setSelectedToppings(prev => {
+                            const current = prev[group.id] || [];
+                            return {
+                              ...prev,
+                              [group.id]: isSelected
+                                ? current.filter(x => x !== opt.id)
+                                : current.length < group.maxSelect ? [...current, opt.id] : current,
+                            };
+                          });
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={opt.id}
+                          onClick={handleClick}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                            border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                            background: isSelected ? 'rgba(76,175,80,0.06)' : 'transparent',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {group.maxSelect === 1 ? (
+                              <div style={{
+                                width: 18, height: 18, borderRadius: '50%',
+                                border: isSelected ? '5px solid var(--primary)' : '2px solid var(--border)',
+                                transition: 'all 0.15s',
+                              }} />
+                            ) : (
+                              <div style={{
+                                width: 18, height: 18, borderRadius: 4,
+                                border: isSelected ? 'none' : '2px solid var(--border)',
+                                background: isSelected ? 'var(--primary)' : 'transparent',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'all 0.15s',
+                              }}>
+                                {isSelected && <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>}
+                              </div>
+                            )}
+                            <Text style={{ fontWeight: isSelected ? 600 : 400 }}>{opt.name}</Text>
+                          </div>
+                          {opt.price > 0 && (
+                            <Text type="secondary" style={{ fontSize: 13 }}>+{formatVND(opt.price)}</Text>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {/* Note */}
+              <div style={{ marginBottom: 20 }}>
+                <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 8 }}>Ghi chú cho quán</Text>
+                <Input.TextArea
+                  value={itemNote}
+                  onChange={e => setItemNote(e.target.value)}
+                  placeholder="VD: Ít cay, không hành..."
+                  rows={2}
+                  style={{ borderRadius: 10 }}
+                />
               </div>
-              <Button
-                type="primary"
-                size="large"
-                onClick={handleAddToCart}
-                loading={addingToCart}
-                style={{ borderRadius: 10, fontWeight: 600, minWidth: 220 }}
-              >
-                Thêm - {formatVND(getItemPrice())}
-              </Button>
+
+              {/* Footer: Qty + Add to cart */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0 0', borderTop: '1px solid var(--border-soft)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Button shape="circle" icon={<Minus size={16} />} onClick={() => setItemQty(Math.max(1, itemQty - 1))} disabled={itemQty <= 1}
+                    style={{ width: 36, height: 36 }} />
+                  <Text strong style={{ fontSize: 18, minWidth: 28, textAlign: 'center' }}>{itemQty}</Text>
+                  <Button shape="circle" icon={<Plus size={16} />} onClick={() => setItemQty(Math.min(selectedItem.maxQuantity, itemQty + 1))} disabled={itemQty >= selectedItem.maxQuantity}
+                    style={{ width: 36, height: 36 }} />
+                </div>
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={handleAddToCart}
+                  loading={addingToCart}
+                  style={{ borderRadius: 12, fontWeight: 600, minWidth: 200, height: 48, fontSize: 15 }}
+                >
+                  Thêm — {formatVND(getItemPrice())}
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -455,10 +701,10 @@ const RestaurantDetailPage: React.FC = () => {
             <Ticket size={22} color="#fff" />
             <Title level={5} style={{ color: '#fff', margin: 0 }}>Voucher có thể thu thập</Title>
           </div>
-          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13 }}>{storeVouchers.length} voucher khả dụng</Text>
+          <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13 }}>{storeOnlyVouchers.length} voucher khả dụng</Text>
         </div>
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 450, overflowY: 'auto' }}>
-          {storeVouchers.map(voucher => (
+          {storeOnlyVouchers.map(voucher => (
             <div key={voucher.id} style={{ display: 'flex', borderRadius: 12, border: '1px solid var(--border-soft)', transition: 'box-shadow 0.2s', flexShrink: 0 }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)'}
               onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}

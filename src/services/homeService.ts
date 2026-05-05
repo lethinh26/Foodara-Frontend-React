@@ -3,15 +3,40 @@ import { apiClient } from './apiClient';
 import { env } from '../config/env';
 import type { Restaurant, RestaurantCategory } from '../types/restaurant';
 
-// Response types from backend
-interface Banner {
+interface BackendBannerResponse {
+  id: string;
+  title?: string;
+  imageUrl?: string;
+  image_url?: string;
+  targetUrl?: string;
+  target_url?: string;
+  targetType?: string;
+  target_type?: string;
+  targetId?: string;
+  target_id?: string;
+  position?: string;
+  displayOrder?: number;
+  isActive?: boolean;
+}
+
+export interface Banner {
   id: string;
   title: string;
-  image_url: string;
-  target_url: string;
-  target_type: string;
-  target_id: string;
-  position: string;
+  imageUrl: string;
+  targetUrl?: string;
+  targetType?: string;
+  targetId?: string;
+}
+
+function mapBackendBanner(b: BackendBannerResponse): Banner {
+  return {
+    id: b.id,
+    title: b.title || '',
+    imageUrl: b.imageUrl || b.image_url || '',
+    targetUrl: b.targetUrl || b.target_url || undefined,
+    targetType: b.targetType || b.target_type || undefined,
+    targetId: b.targetId || b.target_id || undefined,
+  };
 }
 
 interface Campaign {
@@ -22,7 +47,6 @@ interface Campaign {
   banner_url: string;
 }
 
-// Backend store response (snake_case)
 interface BackendStoreResponse {
   id: string;
   name: string;
@@ -66,7 +90,6 @@ interface BackendStoreResponse {
   createdAt?: string;
 }
 
-// Backend category response (snake_case)
 interface BackendCategoryResponse {
   id: string;
   name: string;
@@ -82,7 +105,6 @@ interface BackendCategoryResponse {
   restaurantCount?: number;
 }
 
-// Map backend store to frontend Restaurant type
 function mapBackendStoreToRestaurant(s: BackendStoreResponse): Restaurant {
   return {
     id: s.id,
@@ -116,7 +138,6 @@ function mapBackendStoreToRestaurant(s: BackendStoreResponse): Restaurant {
   };
 }
 
-// Map backend category to frontend RestaurantCategory type
 function mapBackendCategoryToCategory(c: BackendCategoryResponse): RestaurantCategory {
   return {
     id: c.id,
@@ -137,7 +158,8 @@ export const homeService = {
       return [];
     }
     try {
-      return await apiClient.get<Banner[]>('/v1/home/banners');
+      const items = await apiClient.get<BackendBannerResponse[]>('/v1/home/banners');
+      return items.map(mapBackendBanner);
     } catch (e) {
       console.warn("Failed to fetch banners", e);
       return [];

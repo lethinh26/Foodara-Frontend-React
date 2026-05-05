@@ -1,10 +1,12 @@
+import type { LucideIcon } from 'lucide-react';
+
 export type PaymentMethodType = 'cod' | 'ewallet' | 'card' | 'bank_transfer' | 'qr';
 
 export interface PaymentMethod {
   id: string;
   type: PaymentMethodType;
   name: string;
-  icon: string;
+  icon: LucideIcon;
   description: string;
   isDefault: boolean;
   isActive: boolean;
