@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Tag, Empty, Spin, Typography, Button, Tabs } from 'antd';
-import { RotateCcw, Star } from 'lucide-react';
+import { Card, Tag, Empty, Spin, Typography, Button, Tabs, Avatar } from 'antd';
+import { RotateCcw, Star, ShoppingBag } from 'lucide-react';
 import { orderService } from '../../../services/orderService';
 import { formatVND, formatDate } from '../../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../../utils/constants';
@@ -15,30 +15,48 @@ const OrderHistoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    orderService.getOrders('user-001').then(o => { setOrders(o); setLoading(false); });
+    orderService.getOrders().then(o => { setOrders(o); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
 
-  const activeOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status));
-  const pastOrders = orders.filter(o => ['delivered', 'cancelled'].includes(o.status));
+  const activeOrders = orders.filter(o => !['delivered', 'completed', 'cancelled'].includes(o.status));
+  const pastOrders = orders.filter(o => ['delivered', 'completed', 'cancelled'].includes(o.status));
 
   const OrderCard: React.FC<{ order: Order }> = ({ order }) => (
     <Card style={{ borderRadius: 12, marginBottom: 12 }} hoverable onClick={() => navigate(`/customer/order/${order.id}`)}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src={order.restaurantLogo} alt="" style={{ width: 36, height: 36, borderRadius: 8 }} />
+          {order.restaurantLogo ? (
+            <img src={order.restaurantLogo} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover' }} />
+          ) : (
+            <Avatar
+              size={36}
+              shape="square"
+              style={{
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark, #e8590c) 100%)',
+                fontWeight: 700,
+                fontSize: 16,
+              }}
+            >
+              {order.restaurantName?.charAt(0) || <ShoppingBag size={18} />}
+            </Avatar>
+          )}
           <div><Text strong>{order.restaurantName}</Text><br /><Text type="secondary" style={{ fontSize: 12 }}>#{order.orderNumber}</Text></div>
         </div>
         <Tag color={ORDER_STATUS_COLORS[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Tag>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-        {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+        {order.items.length > 0
+          ? order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')
+          : `${order.orderNumber}`
+        }
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text strong style={{ color: 'var(--primary)' }}>{formatVND(order.pricing.total)}</Text>
+        <Text strong style={{ color: 'var(--primary)' }}>{formatVND(order.pricing?.total ?? 0)}</Text>
         <div style={{ display: 'flex', gap: 8 }}>
-          {order.status === 'delivered' && !orders.some(() => false) && (
+          {order.status === 'delivered' && (
             <Button size="small" icon={<Star size={12} />} onClick={e => { e.stopPropagation(); navigate(`/customer/review/${order.id}`); }}>Đánh giá</Button>
           )}
           <Button size="small" icon={<RotateCcw size={12} />} onClick={e => { e.stopPropagation(); }}>Đặt lại</Button>

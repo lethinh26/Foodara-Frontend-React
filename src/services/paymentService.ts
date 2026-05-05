@@ -1,18 +1,16 @@
+import { Banknote, QrCode } from 'lucide-react';
 import { delay } from '../utils/helpers';
 import type { PaymentMethod, PaymentTransaction } from '../types/payment';
 
-const mockPaymentMethods: PaymentMethod[] = [
-  { id: 'pm-1', type: 'cod', name: 'Thanh toán khi nhận hàng', icon: 'Banknote', description: 'Trả tiền mặt khi nhận', isDefault: true, isActive: true, metadata: {} },
-  { id: 'pm-2', type: 'ewallet', name: 'Ví MoMo', icon: 'Wallet', description: 'Thanh toán qua ví MoMo', isDefault: false, isActive: true, metadata: { walletName: 'MoMo' } },
-  { id: 'pm-3', type: 'card', name: 'Thẻ Visa ****1234', icon: 'CreditCard', description: 'Thẻ tín dụng Visa', isDefault: false, isActive: true, metadata: { last4: '1234', brand: 'Visa' } },
-  { id: 'pm-4', type: 'bank_transfer', name: 'Chuyển khoản ngân hàng', icon: 'Building2', description: 'Chuyển khoản qua app ngân hàng', isDefault: false, isActive: true, metadata: {} },
-  { id: 'pm-5', type: 'qr', name: 'Quét mã QR (VNPay)', icon: 'QrCode', description: 'Quét mã QR để thanh toán', isDefault: false, isActive: true, metadata: {} },
+const paymentMethod: PaymentMethod[] = [
+  { id: 'pm-cod', type: 'cod', name: 'Tiền mặt', icon: Banknote, description: 'Thanh toán khi nhận hàng', isDefault: true, isActive: true, metadata: {} },
+  { id: 'pm-qr', type: 'qr', name: 'Quét mã QR', icon: QrCode, description: 'Thanh toán bằng mã QR qua app ngân hàng', isDefault: false, isActive: true, metadata: {} },
 ];
 
 export const paymentService = {
   async getPaymentMethods(): Promise<PaymentMethod[]> {
     await delay(400);
-    return mockPaymentMethods;
+    return paymentMethod;
   },
 
   async processPayment(orderId: string, method: string, amount: number): Promise<PaymentTransaction> {
@@ -44,7 +42,7 @@ export const paymentService = {
       orderId: 'ord-retry',
       amount: 0,
       currency: 'VND',
-      method: 'ewallet',
+      method: 'qr',
       status: 'success',
       providerTransactionId: 'PVD-RETRY-' + Date.now(),
       providerName: 'VNPay',

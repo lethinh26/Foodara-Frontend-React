@@ -51,19 +51,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ role }) => {
     setLoading(true);
     try {
       if (role !== 'admin') {
-        const check = await authService.checkRegister(
-          { email: values.email, password: values.password, fullName: '', phone: '' },
-          role
-        );
-        if (check.exists && check.passwordMatched) {
-          const normalizedRole = role.toUpperCase();
-          if (!check.roles.includes(normalizedRole)) {
-            message.error(
-              `Tài khoản này không có quyền ${roleLinkLabels[role] || role}. Vui lòng đăng ký để liên kết vai trò.`
-            );
-            setLoading(false);
-            return;
+        try {
+          const check = await authService.checkRegister(
+            { email: values.email, password: values.password, fullName: 'check', phone: '0000000000' },
+            role
+          );
+          if (check.exists && check.passwordMatched) {
+            const normalizedRole = role.toUpperCase();
+            if (!check.roles.includes(normalizedRole)) {
+              message.error(
+                `Tài khoản này không có quyền ${roleLinkLabels[role] || role}. Vui lòng đăng ký để liên kết vai trò.`
+              );
+              setLoading(false);
+              return;
+            }
           }
+        } catch {
+          // Pre-check failed — proceed with login anyway
         }
       }
 
