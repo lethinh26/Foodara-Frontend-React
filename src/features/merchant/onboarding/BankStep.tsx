@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Form, Input, Button, Select, Space, Card, Typography } from 'antd';
 import { merchantService } from '../../../services/merchantService';
-import { useNavigate } from 'react-router-dom';
 
 const { Title } = Typography;
 
@@ -13,10 +12,11 @@ interface BankStepProps {
 const BankStep: React.FC<BankStepProps> = ({ onBack, onSuccess }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate()
   useEffect(() => {
-    merchantService.getBankAccounts().then(() => {
-      onSuccess()
+    merchantService.getBankAccounts().then((b) => {
+      if(b && b.length){
+        onSuccess()
+      }
     })
   }, [])
 
@@ -33,7 +33,7 @@ const BankStep: React.FC<BankStepProps> = ({ onBack, onSuccess }) => {
         isDefault: true,
       });
 
-      onSuccess();
+      onSuccess()
     } catch (error) {
       console.error(error);
     } finally {

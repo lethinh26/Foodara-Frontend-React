@@ -34,7 +34,6 @@ const DocumentStep: React.FC<DocumentStepProps> = ({ onBack, onSuccess }) => {
   >({});
   const [form] = Form.useForm();
 
-  // 1. Logic lấy tài liệu đã có khi vừa vào trang
   useEffect(() => {
     const fetchAndCheckDocs = async () => {
       try {
@@ -49,7 +48,6 @@ const DocumentStep: React.FC<DocumentStepProps> = ({ onBack, onSuccess }) => {
 
           setUploadedDocuments(docsMap);
 
-          // LOGIC KIỂM TRA ĐỂ TỰ ĐỘNG NEXT
           const hasAllFour =
             docsMap.business_license &&
             docsMap.food_safety_cert &&
@@ -57,9 +55,7 @@ const DocumentStep: React.FC<DocumentStepProps> = ({ onBack, onSuccess }) => {
             docsMap.id_card_back;
 
           if (hasAllFour) {
-            onSuccess(); // Tự động chuyển sang bước tiếp theo
-            // message.loading("Đang xác thực hồ sơ...", 1).then(() => {
-            // });
+            onSuccess();
           }
         }
       } catch (error) {
@@ -70,12 +66,10 @@ const DocumentStep: React.FC<DocumentStepProps> = ({ onBack, onSuccess }) => {
     };
 
     fetchAndCheckDocs();
-  }, []); // Chỉ chạy 1 lần khi component mount
+  }, []);
 
-  // 2. Kiểm tra xem các tài liệu BẮT BUỘC đã đủ chưa
-  // business_license và food_safety_cert là bắt buộc
   const isReadyToNext = !!(
-    uploadedDocuments.business_license && uploadedDocuments.food_safety_cert
+    uploadedDocuments.business_license && uploadedDocuments.food_safety_cert && uploadedDocuments.id_card_front&& uploadedDocuments.id_card_back
   );
 
   const handleCustomUpload = async (file: File, type: string) => {
@@ -274,7 +268,7 @@ const DocumentStep: React.FC<DocumentStepProps> = ({ onBack, onSuccess }) => {
           {!isReadyToNext && (
             <div style={{ textAlign: "right", marginTop: 8 }}>
               <Text type="danger" style={{ fontSize: 12 }}>
-                * Bạn cần tải lên GPLĐ và Giấy ATTP để tiếp tục
+                Bạn cần tải đủ giấy tờ để có thể tiếp tục
               </Text>
             </div>
           )}

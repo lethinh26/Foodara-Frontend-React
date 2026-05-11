@@ -123,6 +123,15 @@ export interface StoreResponse {
   createdAt: string;
 }
 
+export interface StoreOperatingHoursResponse {
+  storeId: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  isClosed: boolean;
+  updatedAt: string;
+}
+
 export interface BankAccountRequest {
   bankName: string;
   accountNumber: string;

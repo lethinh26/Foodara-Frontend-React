@@ -48,7 +48,7 @@ const menuItems = [
     label: "Khuyến mãi",
   },
   { key: "/merchant/reports", icon: <BarChart3 size={18} />, label: "Báo cáo" },
-  { key: "/merchant/profile", icon: <Store size={18} />, label: "Hồ sơ quán" },
+  { key: "/merchant/profile", icon: <Store size={18} />, label: "Hồ sơ đối tác" },
 ];
 
 export const MerchantLayout: React.FC = () => {
@@ -187,7 +187,6 @@ export const MerchantLayout: React.FC = () => {
             </div>
           </div>
         </Header>
-
         <Content style={{ padding: 24, minHeight: "calc(100vh - 64px)" }}>
           <Outlet />
         </Content>

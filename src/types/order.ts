@@ -51,6 +51,7 @@ export interface PriceBreakdownItem {
 
 export interface Order {
   id: string;
+  storeId: string;
   orderNumber: string;
   customerId: string;
   customerName: string;
