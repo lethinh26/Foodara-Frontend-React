@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Typography, Button, Tag, message, Empty, Alert } from 'antd';
 import { Truck, CheckCircle2, QrCode, Phone } from 'lucide-react';
+import { merchantDriverApi, merchantOrderApi, merchantService } from '../../../services/merchantService';
 
 const { Title, Text } = Typography;
 
@@ -26,6 +27,27 @@ const HandoverPage: React.FC = () => {
 
   const waiting = handovers.filter(h => h.status === 'waiting');
   const completed = handovers.filter(h => h.status === 'completed');
+  const [drivers, setDrivers] = useState<any[]>([])
+
+
+  const loadData = async () => {
+    try {
+      const stores = await merchantService.getStores();
+      const result = await merchantOrderApi.getOrders(stores[0].id)
+      result.forEach(r => {
+        const driverGet = merchantDriverApi.getDriver(r?.driverId || "");
+        setDrivers([driverGet, ...drivers])
+      })
+    } catch (error : any) {
+      message.error(error.message || "Lỗi lấy dữ liệu từ server")
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+    console.log(drivers);
+
+  }, [])
 
   return (
     <div className="animate-fade-in">

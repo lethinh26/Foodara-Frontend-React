@@ -24,6 +24,12 @@ export interface Voucher {
   isUsed: boolean;
   collectedAt: string | null;
   potentialDiscount: number;
+
+  // them
+  startsAt?: string;
+  expiresAt?: string;
+  totalQuantity?: number;
+  discountType?: string;
 }
 
 export interface VoucherPricing {
@@ -89,4 +95,43 @@ export interface Campaign {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CampaignResponse {
+  bannerUrl: string;
+  campaignType: string;
+  createdAt: string;
+  description: string;
+  endsAt: string;
+  id: string;
+  isActive: boolean;
+  name: string;
+  startsAt: string
+}
+
+export interface CampaignJoinRequest {
+  campaignId: string;
+  storeId: string;
+}
+
+export interface CampaignJoinResponse {
+  campaignId: string;
+  storeId: string;
+  joinedAt: string;
+  status: string
+  endedAt: string
+}
+
+export interface VoucherRequest {
+  title: string;
+  description: string;
+  discountValue: number;
+  minOrderValue: number;
+  maxDiscount: number;
+  discountType: VoucherType;
+  scope: VoucherScope;
+  startDate: string;
+  endDate: string;
+  totalQuantity: number;
+  storeId: string;
 }

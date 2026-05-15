@@ -14,7 +14,10 @@ import type {
   StoreResponse,
   BankAccountRequest,
   BankAccountResponse,
+  StoreOperatingHoursResponse,
 } from '../types/merchant';
+import type { CampaignJoinRequest, CampaignJoinResponse, CampaignResponse, Voucher } from '../types/promotion';
+import type { CartItem, Order } from '../types/order';
 
 export const merchantService = {
   async registerMerchant(data: MerchantRegisterRequest): Promise<MerchantProfileResponse> {
@@ -248,6 +251,14 @@ export const merchantService = {
     return result;
   },
 
+  async getOperatingHours(storeId: string): Promise<StoreOperatingHoursResponse[]> {
+    if (env.isMockMode) {
+      await delay(500);
+      return [];
+    }
+    return apiClient.get<StoreOperatingHoursResponse[]>(`/v1/stores/${storeId}/operating-hours`);
+  },
+
   async updateOperatingHours(storeId: string, hours: StoreOperatingHoursRequest[]): Promise<void> {
     if (env.isMockMode) {
       await delay(500);
@@ -341,7 +352,7 @@ export const merchantMenuApi = {
   updateCategory: (id: string, data: MerchantMenuCategoryRequest) =>
     apiClient.put<any>(`/v1/merchant/menu-categories/${id}`, data),
   deleteCategory: (id: string) => apiClient.delete<any>(`/v1/merchant/menu-categories/${id}`),
-  getItems: (storeId: string) => apiClient.get<any[]>(`/v1/merchant/stores/${storeId}/menu-items`),
+  getItems: (storeId: string) => apiClient.get<CartItem[]>(`/v1/merchant/stores/${storeId}/menu-items`),
   createItem: (storeId: string, data: Omit<MerchantMenuItemRequest, 'storeId'>) =>
     apiClient.post<any>(`/v1/merchant/stores/${storeId}/menu-items`, { ...data, storeId }),
   updateItem: (id: string, data: MerchantMenuItemRequest) =>
@@ -354,7 +365,7 @@ export const merchantMenuApi = {
 };
 
 export const merchantOrderApi = {
-  getOrders: (storeId: string) => apiClient.get<any[]>(`/v1/merchant/stores/${storeId}/orders`),
+  getOrders: (storeId: string) => apiClient.get<Order[]>(`/v1/merchant/stores/${storeId}/orders`),
   getOrder: (storeId: string, orderId: string) => apiClient.get<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}`),
   accept: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/accept`, {}),
   reject: (storeId: string, orderId: string, reason: string) =>
@@ -362,17 +373,36 @@ export const merchantOrderApi = {
   preparing: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/preparing`, {}),
   ready: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/ready`, {}),
   handover: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/handover`, {}),
+  completed: (storeId: string, orderId: string) => apiClient.put<any>(`/v1/merchant/stores/${storeId}/orders/${orderId}/completed`, {}),
 };
 
 export const merchantPromotionApi = {
-  getVouchers: () => apiClient.get<any[]>('/v1/merchant/vouchers'),
-  createVoucher: (data: unknown) => apiClient.post<any>('/v1/merchant/vouchers', data),
-  updateVoucher: (id: string, data: unknown) => apiClient.put<any>(`/v1/merchant/vouchers/${id}`, data),
-  getAvailableCampaigns: () => apiClient.get<any[]>('/v1/merchant/campaigns/available'),
-  joinCampaign: (id: string) => apiClient.post<any>(`/v1/merchant/campaigns/${id}/join`),
+  deleteVoucher: (id: string) => apiClient.delete<any>(`/v1/merchant/vouchers/${id}`),
+  getVouchers: () => apiClient.get<Voucher[]>('/v1/merchant/vouchers'),
+  createVoucher: (data: any) => apiClient.post<any>(`/v1/merchant/vouchers/${data.storeId}`, data),
+  updateVoucher: (id: string, data: any) => apiClient.put<any>(`/v1/merchant/vouchers/${id}`, data),
+  getAvailableCampaigns: () => apiClient.get<CampaignResponse[]>('/v1/home/campaigns'),
+  joinCampaign: (request: CampaignJoinRequest) => apiClient.post<any>(`/v1/merchant/campaigns/join`, request),
+  getJoinedCampaigns: () => apiClient.get<CampaignJoinResponse[]>('/v1/merchant/campaigns/join'),
 };
 
 export const merchantReportApi = {
-  overview: () => apiClient.get<any>('/v1/merchant/reports/overview'),
+  // overview: (storeId: string) => apiClient.get<any>(`/v1/merchant/${storeId}/reports/overview`),
+  totalRevenue: (storeId: string) => apiClient.get<any>(`/v1/merchant/${storeId}/reports/total-revenue`),
+  totalOrder: (storeId: string) => apiClient.get<any>(`/v1/merchant/${storeId}/reports/total-order`),
+  avgtime: (storeId: string) => apiClient.get<any>(`/v1/merchant/${storeId}/reports/avg-time`),
+  successRate: (storeId: string) => apiClient.get<any>(`/v1/merchant/${storeId}/reports/success-rate`),
+  revenueAll: (storeId: string, startDate: string, endDate: string) => {
+    if (startDate.trim() && endDate.trim() && startDate && endDate) {
+      return apiClient.get<any>(`/v1/merchant/${storeId}/reports/revenue-data?startDate=${startDate}&endDate=${endDate}`)
+    } else {
+      return apiClient.get<any>(`/v1/merchant/${storeId}/reports/revenue-data`)
+    }
+  },
   orders: () => apiClient.get<any[]>('/v1/merchant/reports/orders'),
 };
+
+
+export const merchantDriverApi = {
+  getDriver: (driverId: string) => apiClient.get<any[]>(`/v1/merchant/driver/${driverId}`),
+}

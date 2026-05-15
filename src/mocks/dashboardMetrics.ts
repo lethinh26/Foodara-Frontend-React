@@ -1,5 +1,6 @@
 import type { AuditLog, AdminDashboardData } from '../types/admin';
 import type { PricingConfig, SLAConfig } from '../types/finance';
+import type { Campaign } from '../types/promotion';
 
 export const mockDashboard: AdminDashboardData = {
   totalOrders: { id: 'm1', name: 'Tổng đơn hàng', value: 12456, previousValue: 11230, change: 10.9, changeType: 'increase', unit: 'đơn', period: 'Tháng 3/2025', icon: 'ShoppingBag', color: '#4CAF50' },
