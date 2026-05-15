@@ -185,6 +185,16 @@ export const voucherService = {
     return response.map(mapVoucher);
   },
 
+  async getPlatformVouchers(): Promise<Voucher[]> {
+    if (env.isMockMode) {
+      await delay(300);
+      return mockVouchers.filter(v => v.scope === 'platform');
+    }
+
+    const response = await apiClient.get<BackendVoucher[]>('/v1/vouchers/platform');
+    return response.map(mapVoucher);
+  },
+
   async getAvailableForCart(storeId: string): Promise<VoucherCartPricing> {
     if (env.isMockMode) {
       await delay(250);
