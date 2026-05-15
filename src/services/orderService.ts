@@ -1,83 +1,208 @@
+import { apiClient } from './apiClient';
+import { env } from '../config/env';
 import { delay, generateId } from '../utils/helpers';
-import { mockOrders, mockVouchers } from '../mocks/orders';
-import type { Order, CheckoutPricing } from '../types/order';
-import type { Voucher } from '../types/promotion';
+import { mockOrders } from '../mocks/orders';
+import type { Order } from '../types/order';
+
+// Response type from backend PlaceOrderResponse
+export interface PlaceOrderApiRequest {
+  storeId: string;
+  addressId: string;
+  paymentMethod: 'cod' | 'qr';
+  note?: string;
+  platformVoucherId?: string;
+  storeVoucherId?: string;
+  platformCode?: string;
+  storeCode?: string;
+}
+
+export interface PlaceOrderApiResponse {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  platformFee: number;
+  voucherDiscount: number;
+  totalAmount: number;
+  checkoutUrl: string | null;
+  placedAt: string;
+  estimatedDeliveryTime: number;
+}
+
+function mapBackendOrder(raw: any): Order {
+  const pricing = {
+    subtotal: raw.subtotal ?? 0,
+    deliveryFee: raw.deliveryFee ?? 0,
+    platformFee: raw.platformFee ?? 0,
+    discount: raw.storeDiscount ?? 0,
+    voucherDiscount: raw.voucherDiscount ?? 0,
+    total: raw.totalAmount ?? 0,
+    appliedVoucherIds: [raw.platformVoucherId, raw.storeVoucherId].filter(Boolean) as string[],
+    breakdown: [],
+  };
+
+  let deliveryAddress = {
+    id: raw.deliveryAddressId || '',
+    userId: raw.customerId || '',
+    label: '',
+    fullAddress: '',
+    street: '',
+    ward: '',
+    districtName: '',
+    cityName: '',
+    coordinates: { lat: Number(raw.deliveryLatitude) || 0, lng: Number(raw.deliveryLongitude) || 0 },
+    note: raw.deliveryNote || '',
+    driverNote: '',
+    isDefault: false,
+    phone: '',
+    contactName: '',
+  };
+  if (raw.deliveryAddressSnapshot) {
+    try {
+      const snap = typeof raw.deliveryAddressSnapshot === 'string'
+        ? JSON.parse(raw.deliveryAddressSnapshot)
+        : raw.deliveryAddressSnapshot;
+      deliveryAddress = {
+        ...deliveryAddress,
+        street: snap.addressLine || '',
+        ward: snap.ward || '',
+        districtName: snap.district || '',
+        cityName: snap.city || '',
+        fullAddress: [snap.addressLine, snap.ward, snap.district, snap.city].filter(Boolean).join(', '),
+        phone: snap.phone || '',
+        contactName: snap.name || '',
+      };
+    } catch {  }
+  }
+
+  const items = (raw.orderItems || raw.items || []).map((item: any) => ({
+    id: item.id || '',
+    menuItemId: item.menuItemId || '',
+    restaurantId: raw.storeId || '',
+    name: item.itemName || '',
+    image: item.itemImageUrl || '',
+    basePrice: Number(item.unitPrice) || 0,
+    quantity: item.quantity || 1,
+    selectedSize: null,
+    selectedToppings: [],
+    selectedVariant: null,
+    note: item.specialInstructions || '',
+    totalPrice: Number(item.totalPrice) || 0,
+  }));
+
+  const statusHistory = (raw.statusHistories || raw.statusHistory || []).map((h: any) => ({
+    id: h.id || '',
+    orderId: raw.id || '',
+    status: h.toStatus || h.status || '',
+    note: h.note || '',
+    timestamp: h.createdAt || h.timestamp || '',
+    updatedBy: h.changedBy || h.updatedBy || '',
+  }));
+
+  return {
+    id: raw.id || '',
+    orderNumber: raw.orderNumber || '',
+    customerId: raw.customerId || '',
+    customerName: '',
+    customerPhone: '',
+    restaurantId: raw.storeId || '',
+    restaurantName: raw.storeName || '',
+    restaurantLogo: raw.storeLogoUrl || '',
+    restaurantPhone: raw.storePhone || '',
+    items,
+    deliveryAddress,
+    status: raw.status || 'pending',
+    statusHistory,
+    pricing,
+    paymentMethod: raw.paymentMethod || 'cod',
+    paymentStatus: raw.paymentStatus || 'pending',
+    driverId: raw.driverId || null,
+    driverName: null,
+    driverPhone: null,
+    estimatedDeliveryTime: raw.estimatedTotalTime || raw.estimatedDeliveryTime || 35,
+    actualDeliveryTime: null,
+    note: raw.deliveryNote || '',
+    cancelReason: raw.cancellationReason || '',
+    cancelledBy: raw.cancelledBy ? raw.cancelledBy.toLowerCase() : null,
+    pickupCode: raw.pickupCode || '',
+    createdAt: raw.createdAt || raw.placedAt || '',
+    updatedAt: raw.updatedAt || '',
+    completedAt: raw.completedAt || null,
+  };
+}
 
 export const orderService = {
-  async getOrders(userId: string): Promise<Order[]> {
-    await delay(600);
-    return mockOrders.filter(o => o.customerId === userId);
+  async createOrder(data: PlaceOrderApiRequest): Promise<PlaceOrderApiResponse> {
+    if (env.isMockMode) {
+      await delay(1000);
+      return {
+        orderId: generateId(),
+        orderNumber: `FD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 999).toString().padStart(3, '0')}`,
+        status: 'PENDING',
+        paymentMethod: data.paymentMethod,
+        paymentStatus: 'pending',
+        subtotal: 0,
+        deliveryFee: 0,
+        platformFee: 0,
+        voucherDiscount: 0,
+        totalAmount: 0,
+        checkoutUrl: null,
+        placedAt: new Date().toISOString(),
+        estimatedDeliveryTime: 35,
+      };
+    }
+    return apiClient.post<PlaceOrderApiResponse>('/v1/orders', data);
+  },
+
+  async getOrders(): Promise<Order[]> {
+    if (env.isMockMode) {
+      await delay(600);
+      return mockOrders;
+    }
+    const rawList = await apiClient.get<any[]>('/v1/orders');
+    return rawList.map(mapBackendOrder);
   },
 
   async getOrderById(id: string): Promise<Order | null> {
-    await delay(500);
-    return mockOrders.find(o => o.id === id) || null;
-  },
-
-  async getAllOrders(): Promise<Order[]> {
-    await delay(600);
-    return mockOrders;
-  },
-
-  async getMerchantOrders(restaurantId: string): Promise<Order[]> {
-    await delay(500);
-    return mockOrders.filter(o => o.restaurantId === restaurantId);
-  },
-
-  async createOrder(orderData: Partial<Order>): Promise<Order> {
-    await delay(1000);
-    const order: Order = {
-      ...mockOrders[0],
-      ...orderData,
-      id: generateId(),
-      orderNumber: `FD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(Math.random() * 999).toString().padStart(3, '0')}`,
-      status: 'pending',
-      statusHistory: [{ id: generateId(), orderId: '', status: 'pending', note: 'Đặt đơn thành công', timestamp: new Date().toISOString(), updatedBy: 'system' }],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      completedAt: null,
-    };
-    return order;
-  },
-
-  async updateOrderStatus(orderId: string, status: Order['status'], _note: string = ''): Promise<Order> {
-    await delay(500);
-    const order = mockOrders.find(o => o.id === orderId);
-    if (!order) throw new Error('Không tìm thấy đơn hàng');
-    return { ...order, status, updatedAt: new Date().toISOString() };
-  },
-
-  async calculatePricing(subtotal: number, deliveryFee: number, vouchers: Voucher[]): Promise<CheckoutPricing> {
-    await delay(300);
-    const platformFee = Math.min(Math.max(subtotal * 0.03, 2000), 10000);
-    let voucherDiscount = 0;
-    vouchers.forEach(v => {
-      if (v.type === 'percentage') voucherDiscount += Math.min(subtotal * v.discountValue / 100, v.maxDiscount);
-      else if (v.type === 'fixed') voucherDiscount += v.discountValue;
-      else if (v.type === 'free_ship') voucherDiscount += Math.min(deliveryFee, v.maxDiscount);
-    });
-    const total = subtotal + deliveryFee + platformFee - voucherDiscount;
-    return {
-      subtotal, deliveryFee, platformFee, discount: 0, voucherDiscount,
-      total: Math.max(total, 0),
-      appliedVoucherIds: vouchers.map(v => v.id),
-      breakdown: [
-        { label: 'Tạm tính', amount: subtotal, type: 'add' },
-        { label: 'Phí giao hàng', amount: deliveryFee, type: 'add' },
-        { label: 'Phí nền tảng', amount: platformFee, type: 'add' },
-        ...(voucherDiscount > 0 ? [{ label: 'Voucher', amount: -voucherDiscount, type: 'subtract' as const }] : []),
-        { label: 'Tổng cộng', amount: Math.max(total, 0), type: 'total' as const },
-      ],
-    };
-  },
-
-  async getVouchers(): Promise<Voucher[]> {
-    await delay(400);
-    return mockVouchers;
+    if (env.isMockMode) {
+      await delay(500);
+      return mockOrders.find(o => o.id === id) || null;
+    }
+    try {
+      const raw = await apiClient.get<any>(`/v1/orders/${id}`);
+      return mapBackendOrder(raw);
+    } catch {
+      return null;
+    }
   },
 
   async cancelOrder(orderId: string, reason: string): Promise<void> {
-    await delay(500);
-    console.info(`Order ${orderId} cancelled: ${reason}`);
+    if (env.isMockMode) {
+      await delay(500);
+      return;
+    }
+    await apiClient.put(`/v1/orders/${orderId}/cancel`, { reason });
+  },
+
+    async getMerchantOrders(restaurantId: string): Promise<Order[]> {
+    if (env.isMockMode) {
+      await delay(500);
+      return mockOrders.filter(o => o.restaurantId === restaurantId);
+    }
+    const rawList = await apiClient.get<any[]>(`/v1/merchant/stores/${restaurantId}/orders`);
+    return rawList.map(mapBackendOrder);
+  },
+
+  async updateOrderStatus(orderId: string, status: Order['status'], _note: string = ''): Promise<Order> {
+    if (env.isMockMode) {
+      await delay(500);
+      const order = mockOrders.find(o => o.id === orderId);
+      if (!order) throw new Error('Không tìm thấy đơn hàng');
+      return { ...order, status, updatedAt: new Date().toISOString() };
+    }
+    throw new Error('Not implemented — use merchant-specific endpoints');
   },
 };

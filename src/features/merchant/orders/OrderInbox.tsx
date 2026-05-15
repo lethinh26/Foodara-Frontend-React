@@ -32,6 +32,20 @@ const OrderInbox: React.FC = () => {
   const [rejectReason, setRejectReason] = useState("");
   const [storeId, setStoreId] = useState<string | null>(null);
 
+  useWebSocket({
+    topic: storeId ? `/topic/merchant.${storeId}.orders` : undefined,
+    onMessage: (msg) => {
+      if (msg && msg.id) {
+        setOrders(prev => [msg, ...prev]);
+        message.success('Có đơn hàng mới!');
+        try {
+          const audio = new Audio('/sound/ting.mp3');
+          audio.play().catch(e => console.log('Audio play failed:', e));
+        } catch (e) {}
+      }
+    }
+  });
+
   useEffect(() => {
     const loadOrders = async () => {
       try {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Tag, Empty, Typography, Button, message } from 'antd';
+import { Card, Tag, Empty, Typography, Button, message, Tabs, Spin } from 'antd';
 import { Ticket, Calendar, Download } from 'lucide-react';
 import { voucherService } from '../../../services/voucherService';
 import { formatDate, formatVND } from '../../../utils/format';
@@ -8,15 +8,20 @@ import type { Voucher } from '../../../types/promotion';
 const { Title, Text } = Typography;
 
 const VoucherListPage: React.FC = () => {
-  const [vouchers, setVouchers] = useState<Voucher[]>([]);
+  const [myVouchers, setMyVouchers] = useState<Voucher[]>([]);
+  const [platformVouchers, setPlatformVouchers] = useState<Voucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [collectingId, setCollectingId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const data = await voucherService.getMyVouchers();
-      setVouchers(data);
+      const [myData, platformData] = await Promise.all([
+        voucherService.getMyVouchers(),
+        voucherService.getPlatformVouchers()
+      ]);
+      setMyVouchers(myData);
+      setPlatformVouchers(platformData);
     } finally {
       setLoading(false);
     }
@@ -30,7 +35,19 @@ const VoucherListPage: React.FC = () => {
     setCollectingId(voucher.id);
     try {
       const result = await voucherService.collectVoucher(voucher.id);
-      setVouchers(prev => prev.map(v => (v.id === voucher.id ? { ...v, ...result, isCollected: true } : v)));
+      
+      // Update myVouchers
+      setMyVouchers(prev => {
+        const exists = prev.find(v => v.id === voucher.id);
+        if (exists) {
+          return prev.map(v => v.id === voucher.id ? { ...v, ...result, isCollected: true } : v);
+        }
+        return [{ ...voucher, ...result, isCollected: true }, ...prev];
+      });
+
+      // Update platformVouchers
+      setPlatformVouchers(prev => prev.map(v => (v.id === voucher.id ? { ...v, ...result, isCollected: true } : v)));
+      
       message.success(`Đã thu thập voucher ${voucher.code}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Không thể thu thập voucher. Vui lòng thử lại.');
@@ -39,22 +56,21 @@ const VoucherListPage: React.FC = () => {
     }
   };
 
-  if (!loading && vouchers.length === 0) {
-    return <div style={{ padding: 24 }}><Empty description="Không có voucher" /></div>;
-  }
+  const renderVoucherList = (list: Voucher[], emptyMessage: string) => {
+    if (list.length === 0) {
+      return <Empty description={emptyMessage} />;
+    }
 
-  return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: 24 }} className="animate-fade-in">
-      <Title level={4}>Voucher cua toi</Title>
+    return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {vouchers.map(v => (
+        {list.map(v => (
           <Card key={v.id} style={{ borderRadius: 12, borderLeft: `4px solid ${v.scope === 'platform' ? 'var(--primary)' : 'var(--secondary)'}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <Ticket size={16} color="var(--primary)" />
                   <Text strong style={{ fontSize: 15 }}>{v.title}</Text>
-                  <Tag color={v.scope === 'platform' ? 'green' : 'orange'}>{v.scope === 'platform' ? 'Foodara' : 'Voucher quan'}</Tag>
+                  <Tag color={v.scope === 'platform' ? 'green' : 'orange'}>{v.scope === 'platform' ? 'Foodara' : 'Voucher quán'}</Tag>
                   {v.isCollected ? <Tag color="green">Đã thu thập</Tag> : <Tag color="gold">Chưa thu thập</Tag>}
                 </div>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>{v.description}</Text>
@@ -86,6 +102,31 @@ const VoucherListPage: React.FC = () => {
           </Card>
         ))}
       </div>
+    );
+  };
+
+  if (loading) {
+    return <div style={{ padding: 48, textAlign: 'center' }}><Spin size="large" /></div>;
+  }
+
+  return (
+    <div style={{ maxWidth: 760, margin: '0 auto', padding: 24 }} className="animate-fade-in">
+      <Title level={4}>Kho Voucher</Title>
+      <Tabs
+        defaultActiveKey="1"
+        items={[
+          {
+            key: '1',
+            label: 'Voucher của tôi',
+            children: renderVoucherList(myVouchers, 'Bạn chưa có voucher nào'),
+          },
+          {
+            key: '2',
+            label: 'Voucher hệ thống',
+            children: renderVoucherList(platformVouchers, 'Hiện tại không có voucher hệ thống nào'),
+          },
+        ]}
+      />
     </div>
   );
 };

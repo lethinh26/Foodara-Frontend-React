@@ -30,7 +30,6 @@ import { locationService } from '../../../services/locationService';
 import { formatVND } from '../../../utils/format';
 import type { Voucher, VoucherCartPricing } from '../../../types/promotion';
 import type { PaymentMethod } from '../../../types/payment';
-import type { Address } from '../../../types/location';
 import type { AddressResponse, AddressRequest } from '../../../services/authService';
 import type { ProvinceItem, DistrictItem, WardItem } from '../../../services/locationService';
 
@@ -44,6 +43,8 @@ const labelOptions = [
 ];
 
 const ADD_ADDRESS_VALUE = '__add_address__';
+
+
 
 const CheckoutPage: React.FC = () => {
     const navigate = useNavigate();
@@ -64,7 +65,7 @@ const CheckoutPage: React.FC = () => {
 
     const [selectedAddress, setSelectedAddress] = useState('');
     const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-    const [selectedPayment, setSelectedPayment] = useState('pm-1');
+    const [selectedPayment, setSelectedPayment] = useState('pm-cod');
     const [vouchers, setVouchers] = useState<Voucher[]>([]);
     const [voucherPricing, setVoucherPricing] = useState<VoucherCartPricing | null>(null);
     const [selectedStoreVoucherId, setSelectedStoreVoucherId] = useState<string | undefined>(undefined);
@@ -391,51 +392,30 @@ const CheckoutPage: React.FC = () => {
                 return;
             }
 
-            const selectedAddressData = addresses.find(a => a.id === selectedAddress);
-            if (!selectedAddressData) {
+            if (!selectedAddress) {
                 message.error('Địa chỉ giao hàng không hợp lệ.');
                 return;
             }
-            const cityName = selectedAddressData.cityName || '';
-            const addrLabel = labelOptions.find(o => o.value === selectedAddressData.label)?.label || selectedAddressData.label;
-            const addr: Address = {
-                id: selectedAddressData.id,
-                userId: 'user-001',
-                label: addrLabel,
-                fullAddress: [selectedAddressData.addressLine, selectedAddressData.ward, selectedAddressData.districtName, cityName].filter(Boolean).join(', '),
-                street: selectedAddressData.addressLine,
-                ward: selectedAddressData.ward || '',
-                districtName: selectedAddressData.districtName || '',
-                cityName: cityName,
-                coordinates: { lat: selectedAddressData.latitude || 0, lng: selectedAddressData.longitude || 0 },
-                note: selectedAddressData.deliveryNote || '',
-                driverNote: '',
-                isDefault: selectedAddressData.isDefault,
-                phone: selectedAddressData.recipientPhone || '',
-                contactName: selectedAddressData.recipientName || '',
-            };
-            await orderService.createOrder({
-                customerId: 'user-001',
-                restaurantId: restaurant.id || '',
-                restaurantName: restaurant.name || '',
-                items: cartItems,
-                deliveryAddress: addr,
-                paymentMethod: selectedPayment,
-                note,
-                pricing: {
-                    subtotal,
-                    deliveryFee,
-                    platformFee,
-                    discount: 0,
-                    voucherDiscount,
-                    total,
-                    appliedVoucherIds: selectedVoucherIds,
-                    breakdown: [],
-                },
+
+            const paymentMethod = selectedPayment === 'pm-qr' ? 'qr' : 'cod';
+
+            const result = await orderService.createOrder({
+                storeId: restaurant.id || '',
+                addressId: selectedAddress,
+                paymentMethod,
+                note: note || undefined,
+                platformVoucherId: selectedSystemDiscountVoucherId || selectedSystemShipVoucherId || undefined,
+                storeVoucherId: selectedStoreVoucherId || undefined,
             });
+
             await dispatch(clearCart()).unwrap();
             message.success('Đặt hàng thành công!');
-            navigate('/customer/order/ord-001');
+
+            if (paymentMethod === 'qr' && result.checkoutUrl) {
+                window.location.href = result.checkoutUrl;
+            } else {
+                navigate(`/customer/order/${result.orderId}`);
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Đặt hàng thất bại. Vui lòng thử lại.';
             message.error(errorMessage);
@@ -580,21 +560,57 @@ const CheckoutPage: React.FC = () => {
             </Card>
 
             <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <CreditCard size={18} color="#fff" />
                     </div>
                     <Text strong style={{ fontSize: 15 }}>Phương thức thanh toán</Text>
                 </div>
-                <Radio.Group value={selectedPayment} onChange={e => setSelectedPayment(e.target.value)} style={{ width: '100%' }}>
-                    <Space direction="vertical" style={{ width: '100%' }}>
-                        {paymentMethods.map(pm => (
-                            <Radio key={pm.id} value={pm.id} style={{ padding: '8px 0', width: '100%' }}>
-                                <Space><Text>{pm.name}</Text><Text type="secondary" style={{ fontSize: 12 }}>{pm.description}</Text></Space>
-                            </Radio>
-                        ))}
-                    </Space>
-                </Radio.Group>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    {paymentMethods.map(pm => {
+                        const isSelected = selectedPayment === pm.id;
+                        const IconComponent = pm.icon;
+                        return (
+                            <div
+                                key={pm.id}
+                                onClick={() => setSelectedPayment(pm.id)}
+                                style={{
+                                    padding: '16px 14px',
+                                    borderRadius: 12,
+                                    border: isSelected ? '2px solid var(--primary)' : '1.5px solid var(--border-soft)',
+                                    background: isSelected ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    position: 'relative',
+                                    boxShadow: isSelected ? '0 2px 12px rgba(76,175,80,0.12)' : 'none',
+                                }}
+                                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--primary-light)'; }}
+                                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'var(--border-soft)'; }}
+                            >
+                                {isSelected && (
+                                    <div style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>✓</span>
+                                    </div>
+                                )}
+                                <div style={{
+                                    width: 44, height: 44, borderRadius: 12,
+                                    background: 'var(--primary)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    <IconComponent size={22} color="#fff" />
+                                </div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <Text strong style={{ display: 'block', fontSize: 13 }}>{pm.name}</Text>
+                                    <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.3 }}>{pm.description}</Text>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
             </Card>
 
             <Card style={{ marginBottom: 24, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>

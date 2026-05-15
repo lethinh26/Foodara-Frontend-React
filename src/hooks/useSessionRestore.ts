@@ -1,15 +1,16 @@
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../hooks/useStore';
-import { loginSuccess, logout } from '../store/authSlice';
+import { loginSuccess, logout, setAuthChecking, selectAuthStatus } from '../store/authSlice';
 import { authService } from '../services/authService';
 
 
 export function useSessionRestore() {
   const dispatch = useAppDispatch();
-  const isAuthenticated = useAppSelector(state => state.auth.isAuthenticated);
+  const authStatus = useAppSelector(selectAuthStatus);
 
   useEffect(() => {
-    if (isAuthenticated) return;
+    if (authStatus !== 'idle') return;
+    dispatch(setAuthChecking());
 
     const restoreSession = async () => {
       try {
@@ -21,5 +22,6 @@ export function useSessionRestore() {
     };
 
     restoreSession();
-  }, [isAuthenticated, dispatch]);
+  }, [authStatus, dispatch]);
 }
+

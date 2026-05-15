@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Spin } from 'antd';
 import { CustomerLayout } from '../layouts/CustomerLayout';
 import { MerchantLayout } from '../layouts/MerchantLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
@@ -31,10 +32,13 @@ const MerchantRegister = React.lazy(() => import('../features/merchant/onboardin
 
 const AdminDashboard = React.lazy(() => import('../features/admin/analytics/BIDashboard'));
 const AdminUsers = React.lazy(() => import('../features/admin/users/UserManagement'));
-const AdminZones = React.lazy(() => import('../features/admin/zones/ZoneManager'));
+const AdminMerchants = React.lazy(() => import('../features/admin/merchants/MerchantManagement'));
+const AdminDrivers = React.lazy(() => import('../features/admin/drivers/DriverManagement'));
 const AdminPricing = React.lazy(() => import('../features/admin/pricing/PricingConfigPage'));
-const AdminCampaigns = React.lazy(() => import('../features/admin/campaigns/CampaignManager'));
+const AdminPromotions = React.lazy(() => import('../features/admin/promotions/PromotionManagement'));
 const AdminOrders = React.lazy(() => import('../features/admin/orders/OrderMonitor'));
+const AdminReviews = React.lazy(() => import('../features/admin/reviews/ReviewModeration'));
+
 
 const AdminAudit = React.lazy(() => import('../features/admin/audit/AuditLogPage'));
 
@@ -56,7 +60,7 @@ const Unauthorized = () => (
 
 const Loading = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '40vh' }}>
-    <div className="animate-pulse" style={{ color: 'var(--primary)', fontSize: 16 }}>Đang tải...</div>
+    <Spin size="large" />
   </div>
 );
 
@@ -104,10 +108,13 @@ export const AppRouter: React.FC = () => {
           <Route path="/admin" element={<AuthGuard requiredRole="admin"><AdminLayout /></AuthGuard>}>
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="zones" element={<AdminZones />} />
+            <Route path="merchants" element={<AdminMerchants />} />
+            <Route path="drivers" element={<AdminDrivers />} />
             <Route path="pricing" element={<AdminPricing />} />
-            <Route path="campaigns" element={<AdminCampaigns />} />
+            <Route path="campaigns" element={<AdminPromotions />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="reviews" element={<AdminReviews />} />
+
 
             <Route path="audit" element={<AdminAudit />} />
           </Route>

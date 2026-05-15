@@ -59,6 +59,11 @@ export const MerchantLayout: React.FC = () => {
   const unreadCount = useAppSelector(selectUnreadCount);
   const [collapsed, setCollapsed] = useState(false);
 
+  const selectedKey = menuItems
+    .map(item => item.key)
+    .filter(key => location.pathname === key || location.pathname.startsWith(key + '/'))
+    .sort((a, b) => b.length - a.length)[0] || '';
+
   const handleLogout = async () => {
     try {
       await authService.logout();
@@ -116,7 +121,7 @@ export const MerchantLayout: React.FC = () => {
         </div>
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ borderRight: "none", padding: "8px 0" }}

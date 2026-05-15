@@ -27,6 +27,7 @@ export interface UserProfileResponse {
   status: string;
   emailVerified: boolean;
   phoneVerified: boolean;
+  roles?: string[];
   createdAt: string;
 }
 
@@ -120,6 +121,17 @@ export const authService = {
     );
 
     const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
+    const backendRoles = (profile.roles || []).map(r => r.toLowerCase());
+    
+    if (role === 'admin' && !backendRoles.includes('admin') && !backendRoles.includes('superadmin')) {
+      await this.logout();
+      throw new Error('Tài khoản không có quyền quản trị viên!');
+    }
+    if (role === 'merchant' && !backendRoles.includes('merchant')) {
+      await this.logout();
+      throw new Error('Tài khoản không có quyền chủ quán!');
+    }
+    
     return { user: mapProfileToUser(profile, role) };
   },
 
@@ -181,7 +193,21 @@ export const authService = {
       return mockCustomer;
     }
     const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
-    return mapProfileToUser(profile);
+    const backendRoles = (profile.roles || []).map(r => r.toLowerCase());
+
+    // Detect role from current URL path
+    const path = window.location.pathname;
+    let role: UserRole = 'customer';
+    if (path.startsWith('/admin') && backendRoles.includes('admin')) {
+      role = 'admin';
+    } else if (path.startsWith('/merchant') && backendRoles.includes('merchant')) {
+      role = 'merchant';
+    } else if (backendRoles.includes('customer')) {
+      role = 'customer';
+    } else if (backendRoles.length > 0) {
+      role = backendRoles[0] as UserRole;
+    }
+    return mapProfileToUser(profile, role);
   },
 
   async getUserResponse(data: { email: string, password: string }): Promise<UserResponse> {
@@ -264,6 +290,7 @@ export const authService = {
 
 
   async logout(): Promise<void> {
+
     if (env.isMockMode) {
       await delay(300);
       return;

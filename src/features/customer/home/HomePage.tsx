@@ -2,29 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Tag, Carousel, Skeleton, Row, Col, Typography, Space, Button } from 'antd';
 import { MapPin, Clock, Star, ChevronRight, Flame, Truck, Sparkles, TrendingUp } from 'lucide-react';
-import { homeService } from '../../../services/homeService';
+import { homeService, type Banner } from '../../../services/homeService';
 import { formatVND, formatDistance, formatETA } from '../../../utils/format';
 import type { Restaurant, RestaurantCategory } from '../../../types/restaurant';
 
 const { Title, Text } = Typography;
 
-interface Banner {
-  id: string;
-  title: string;
-  image_url: string;
-  target_url?: string;
-  target_type?: string;
-}
-
-const defaultBanners: Banner[] = [
-  { id: '1', image_url: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&h=400&fit=crop', title: 'Ưu đãi tháng 4 - Giảm đến 50%' },
-  { id: '2', image_url: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1200&h=400&fit=crop', title: 'Free Ship - Đơn từ 50k toàn thành phố' },
-  { id: '3', image_url: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&h=400&fit=crop', title: 'Flash Deal 11h-13h - Giảm sốc mỗi ngày' },
-];
-
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [banners, setBanners] = useState<Banner[]>(defaultBanners);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<RestaurantCategory[]>([]);
   const [featured, setFeatured] = useState<Restaurant[]>([]);
   const [nearby, setNearby] = useState<Restaurant[]>([]);
@@ -40,13 +26,7 @@ const HomePage: React.FC = () => {
           homeService.getPopularStores(10),
           homeService.getNearbyStores(undefined, undefined, 10),
         ]);
-        if (bannerRes.length > 0) {
-          setBanners(bannerRes.map(b => ({
-            id: b.id,
-            title: b.title || '',
-            image_url: b.image_url,
-          })));
-        }
+        setBanners(bannerRes);
         setCategories(cats);
         setFeatured(feat);
         setNearby(near);
@@ -84,7 +64,12 @@ const HomePage: React.FC = () => {
       onClick={() => navigate(`/customer/restaurant/${restaurant.id}`)}
     >
       <div style={{ padding: '4px 0' }}>
-        <Text strong style={{ fontSize: 15, display: 'block', marginBottom: 4 }}>{restaurant.name}</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          {restaurant.logo ? (
+            <img src={restaurant.logo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--border-soft)' }} />
+          ) : null}
+          <Text strong style={{ fontSize: 15 }}>{restaurant.name}</Text>
+        </div>
         <Space size={12} style={{ marginBottom: 4 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--secondary)', fontWeight: 600, fontSize: 13 }}>
             <Star size={14} fill="var(--secondary)" /> {restaurant.rating}
@@ -114,18 +99,23 @@ const HomePage: React.FC = () => {
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '16px 24px 48px' }} className="animate-fade-in">
       {/* Banner */}
-      <Carousel autoplay autoplaySpeed={4000} dots style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 32 }}>
-        {banners.map(b => (
-          <div key={b.id}>
-            <div style={{ position: 'relative', height: 220, borderRadius: 16, overflow: 'hidden' }}>
-              <img src={b.image_url} alt={b.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 40px' }}>
-                <div style={{ color: '#fff', fontSize: 28, fontWeight: 700 }}>{b.title}</div>
+      {banners.length > 0 && (
+        <Carousel autoplay autoplaySpeed={4000} dots style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 32 }}>
+          {banners.map(b => (
+            <div key={b.id}>
+              <div
+                style={{ position: 'relative', height: 220, borderRadius: 16, overflow: 'hidden', cursor: b.targetUrl ? 'pointer' : 'default' }}
+                onClick={() => b.targetUrl && navigate(b.targetUrl)}
+              >
+                <img src={b.imageUrl} alt={b.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '24px 40px' }}>
+                  <div style={{ color: '#fff', fontSize: 26, fontWeight: 700, textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{b.title}</div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </Carousel>
+          ))}
+        </Carousel>
+      )}
 
       {/* Categories */}
       <div className="section">
