@@ -61,7 +61,6 @@ export interface MerchantProfile {
   contractStartDate: string;
   contractEndDate: string;
   commissionRate: number; // percentage
-  settlementCycle: 'daily' | 'weekly' | 'monthly';
 }
 
 export interface MerchantDocument {

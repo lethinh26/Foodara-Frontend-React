@@ -32,10 +32,13 @@ const MerchantRegister = React.lazy(() => import('../features/merchant/onboardin
 
 const AdminDashboard = React.lazy(() => import('../features/admin/analytics/BIDashboard'));
 const AdminUsers = React.lazy(() => import('../features/admin/users/UserManagement'));
-const AdminZones = React.lazy(() => import('../features/admin/zones/ZoneManager'));
+const AdminMerchants = React.lazy(() => import('../features/admin/merchants/MerchantManagement'));
+const AdminDrivers = React.lazy(() => import('../features/admin/drivers/DriverManagement'));
 const AdminPricing = React.lazy(() => import('../features/admin/pricing/PricingConfigPage'));
-const AdminCampaigns = React.lazy(() => import('../features/admin/campaigns/CampaignManager'));
+const AdminPromotions = React.lazy(() => import('../features/admin/promotions/PromotionManagement'));
 const AdminOrders = React.lazy(() => import('../features/admin/orders/OrderMonitor'));
+const AdminReviews = React.lazy(() => import('../features/admin/reviews/ReviewModeration'));
+
 
 const AdminAudit = React.lazy(() => import('../features/admin/audit/AuditLogPage'));
 
@@ -105,10 +108,13 @@ export const AppRouter: React.FC = () => {
           <Route path="/admin" element={<AuthGuard requiredRole="admin"><AdminLayout /></AuthGuard>}>
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
-            <Route path="zones" element={<AdminZones />} />
+            <Route path="merchants" element={<AdminMerchants />} />
+            <Route path="drivers" element={<AdminDrivers />} />
             <Route path="pricing" element={<AdminPricing />} />
-            <Route path="campaigns" element={<AdminCampaigns />} />
+            <Route path="campaigns" element={<AdminPromotions />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="reviews" element={<AdminReviews />} />
+
 
             <Route path="audit" element={<AdminAudit />} />
           </Route>

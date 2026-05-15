@@ -13,7 +13,7 @@ const MerchantProfilePage: React.FC = () => {
     address: '123 Nguyễn Trãi, Quận 1, TP.HCM', phone: '0901111222',
     openTime: '06:00', closeTime: '22:00', prepTime: 10, logo: 'https://api.dicebear.com/7.x/initials/svg?seed=PHX',
     coverImage: 'https://images.unsplash.com/photo-1503764654157-72d979d9af2f?w=800',
-    commissionRate: 20, settlementCycle: 'Hàng tuần', bankName: 'Vietcombank', bankAccount: '****5678',
+    commissionRate: 20, bankName: 'Vietcombank', bankAccount: '****5678',
   };
 
   return (
@@ -54,7 +54,7 @@ const MerchantProfilePage: React.FC = () => {
       <Card title="Thông tin hợp đồng" style={{ borderRadius: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text>Tỷ lệ hoa hồng</Text><Text strong>{profile.commissionRate}%</Text></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text>Chu kỳ đối soát</Text><Text strong>{profile.settlementCycle}</Text></div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text>Ngân hàng</Text><Text strong>{profile.bankName}</Text></div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text>Số tài khoản</Text><Text strong>{profile.bankAccount}</Text></div>
         </Space>
