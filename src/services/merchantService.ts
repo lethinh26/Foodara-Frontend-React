@@ -375,6 +375,4 @@ export const merchantPromotionApi = {
 export const merchantReportApi = {
   overview: () => apiClient.get<any>('/v1/merchant/reports/overview'),
   orders: () => apiClient.get<any[]>('/v1/merchant/reports/orders'),
-  settlements: () => apiClient.get<any[]>('/v1/merchant/settlements'),
-  settlementDetail: (id: string) => apiClient.get<any>(`/v1/merchant/settlements/${id}`),
 };

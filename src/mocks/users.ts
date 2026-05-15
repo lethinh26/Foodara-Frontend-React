@@ -67,7 +67,7 @@ export const mockDevices: SessionDevice[] = [
 export const mockRoles: Role[] = [
   { id: 'role-1', name: 'Super Admin', description: 'Toàn quyền trên hệ thống', permissions: ['*'], userCount: 2, createdAt: '2023-01-01T00:00:00Z' },
   { id: 'role-2', name: 'Operations Manager', description: 'Quản lý vận hành, đơn hàng, quán', permissions: ['orders.*', 'restaurants.*', 'users.read', 'zones.*'], userCount: 5, createdAt: '2023-01-01T00:00:00Z' },
-  { id: 'role-3', name: 'Finance', description: 'Quản lý tài chính, đối soát', permissions: ['finance.*', 'settlements.*', 'orders.read'], userCount: 3, createdAt: '2023-01-01T00:00:00Z' },
+  { id: 'role-3', name: 'Finance', description: 'Quản lý tài chính', permissions: ['finance.*', 'orders.read'], userCount: 3, createdAt: '2023-01-01T00:00:00Z' },
   { id: 'role-4', name: 'Marketing', description: 'Quản lý campaign, banner, voucher', permissions: ['campaigns.*', 'promotions.*', 'banners.*'], userCount: 4, createdAt: '2023-06-01T00:00:00Z' },
   { id: 'role-5', name: 'Support', description: 'Hỗ trợ khách hàng, xem thông tin', permissions: ['orders.read', 'users.read', 'restaurants.read'], userCount: 8, createdAt: '2023-06-01T00:00:00Z' },
 ];
