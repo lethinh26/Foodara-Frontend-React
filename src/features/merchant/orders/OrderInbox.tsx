@@ -5,6 +5,7 @@ import { merchantService, merchantOrderApi } from '../../../services/merchantSer
 import { formatVND, formatRelativeTime } from '../../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../../utils/constants';
 import type { Order } from '../../../types/order';
+import { useWebSocket } from '../../../hooks/useWebSocket';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +14,20 @@ const OrderInbox: React.FC = () => {
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [storeId, setStoreId] = useState<string | null>(null);
+
+  useWebSocket({
+    topic: storeId ? `/topic/merchant.${storeId}.orders` : undefined,
+    onMessage: (msg) => {
+      if (msg && msg.id) {
+        setOrders(prev => [msg, ...prev]);
+        message.success('Có đơn hàng mới!');
+        try {
+          const audio = new Audio('/sound/ting.mp3');
+          audio.play().catch(e => console.log('Audio play failed:', e));
+        } catch (e) {}
+      }
+    }
+  });
 
   useEffect(() => {
     const loadOrders = async () => {

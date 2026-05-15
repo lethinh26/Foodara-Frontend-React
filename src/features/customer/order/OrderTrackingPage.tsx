@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Typography, Steps, Tag, Button, Spin, Divider, Avatar, message } from 'antd';
 import { Phone, MapPin, Store, Bike, Clock, CheckCircle2, ArrowLeft, QrCode, Copy, CreditCard, Banknote, Package, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { orderService } from '../../../services/orderService';
+import { useWebSocket } from '../../../hooks/useWebSocket';
 import { formatVND, formatRelativeTime } from '../../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../../utils/constants';
 import type { Order } from '../../../types/order';
@@ -32,6 +33,16 @@ const OrderTrackingPage: React.FC = () => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useWebSocket({
+    topic: id ? `/topic/orders.${id}` : undefined,
+    onMessage: (msg) => {
+      if (msg && msg.status) {
+        setOrder(prev => prev ? { ...prev, ...msg } : prev);
+        message.info('Trạng thái đơn hàng vừa được cập nhật!');
+      }
+    }
+  });
 
   const loadOrder = useCallback(async () => {
     const o = await orderService.getOrderById(id || '');

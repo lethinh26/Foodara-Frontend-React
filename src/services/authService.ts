@@ -121,6 +121,17 @@ export const authService = {
     );
 
     const profile = await apiClient.get<UserProfileResponse>('/v1/users/me');
+    const backendRoles = (profile.roles || []).map(r => r.toLowerCase());
+    
+    if (role === 'admin' && !backendRoles.includes('admin') && !backendRoles.includes('superadmin')) {
+      await this.logout();
+      throw new Error('Tài khoản không có quyền quản trị viên!');
+    }
+    if (role === 'merchant' && !backendRoles.includes('merchant')) {
+      await this.logout();
+      throw new Error('Tài khoản không có quyền chủ quán!');
+    }
+    
     return { user: mapProfileToUser(profile, role) };
   },
 
