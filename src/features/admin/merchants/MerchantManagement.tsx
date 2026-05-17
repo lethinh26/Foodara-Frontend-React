@@ -4,7 +4,7 @@ import { Search, Eye, CheckCircle, XCircle, Store, Star, FileText, CreditCard, C
 import { adminService } from '../../../services/adminService';
 import { formatDate, formatVND } from '../../../utils/format';
 import toast from 'react-hot-toast';
-import type { AdminMerchant, AdminStore, ApprovalStatus, AdminStoreCategory, AdminStoreTag, StoreDocument, StoreBankAccount, StoreOperatingHour } from '../../../types/admin';
+import type { AdminMerchant, AdminStore, ApprovalStatus, AdminStoreCategory, StoreDocument, StoreBankAccount, StoreOperatingHour } from '../../../types/admin';
 import type { TablePaginationConfig } from 'antd';
 
 const { Title, Text } = Typography;
@@ -357,62 +357,6 @@ const CategoriesTab: React.FC = () => {
   );
 };
 
-// Tags tab
-const TagsTab: React.FC = () => {
-  const [data, setData] = useState<AdminStoreTag[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form] = Form.useForm();
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setData(await adminService.getStoreTags()); } catch {}
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleCreate = async () => {
-    try {
-      const vals = await form.validateFields();
-      await adminService.createStoreTag(vals);
-      toast.success('Đã tạo.'); setModalOpen(false); form.resetFields(); load();
-    } catch {}
-  };
-
-  const handleDelete = async (id: string) => {
-    try { await adminService.deleteStoreTag(id); toast.success('Đã xoá.'); load(); } catch { toast.error('Lỗi.'); }
-  };
-
-  if (loading) return <Skeleton active paragraph={{ rows: 4 }} />;
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Text strong>Tags ({data.length})</Text>
-        <Button size="small" type="primary" onClick={() => setModalOpen(true)}>Thêm</Button>
-      </div>
-      {data.length === 0 ? <Empty description="Chưa có tag" /> : (
-        <Table dataSource={data} rowKey="id" size="small" pagination={false} columns={[
-          { title: 'Tên', dataIndex: 'name', key: 'name' },
-          { title: 'Loại', dataIndex: 'tagType', key: 'type', width: 100, render: (v: string | null) => v || '—' },
-          { title: 'Màu', key: 'color', width: 60, render: (_: unknown, r: AdminStoreTag) => r.colorHex ? <div style={{ width: 20, height: 20, borderRadius: 4, background: r.colorHex }} /> : '—' },
-          { title: 'Thứ tự', dataIndex: 'displayOrder', key: 'order', width: 70 },
-          { title: '', key: 'del', width: 60, render: (_: unknown, r: AdminStoreTag) => (
-            <Popconfirm title="Xoá?" onConfirm={() => handleDelete(r.id)} okText="Xoá" cancelText="Huỷ"><Button size="small" danger>Xoá</Button></Popconfirm>
-          )},
-        ]} />
-      )}
-      <Modal title="Thêm tag" open={modalOpen} onCancel={() => setModalOpen(false)} onOk={handleCreate} okText="Tạo" cancelText="Huỷ">
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label="Tên" rules={[{ required: true, message: 'Nhập tên' }]}><Input /></Form.Item>
-          <Form.Item name="tagType" label="Loại"><Input placeholder="vd: cuisine, feature" /></Form.Item>
-          <Form.Item name="colorHex" label="Màu"><Input placeholder="#FF5722" /></Form.Item>
-        </Form>
-      </Modal>
-    </div>
-  );
-};
-
 // Main page
 const MerchantManagement: React.FC = () => (
   <div className="animate-fade-in">
@@ -420,7 +364,6 @@ const MerchantManagement: React.FC = () => (
       { key: 'merchants', label: 'Merchants', children: <MerchantsTab /> },
       { key: 'stores', label: 'Stores', children: <StoresTab /> },
       { key: 'categories', label: 'Danh mục', children: <CategoriesTab /> },
-      { key: 'tags', label: 'Tags', children: <TagsTab /> },
     ]} />
   </div>
 );

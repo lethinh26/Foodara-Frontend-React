@@ -26,8 +26,8 @@ const MenuManager = React.lazy(() => import('../features/merchant/menu/MenuManag
 const MerchantInventory = React.lazy(() => import('../features/merchant/inventory/InventoryPage'));
 const MerchantHandover = React.lazy(() => import('../features/merchant/handover/HandoverPage'));
 const MerchantPromotions = React.lazy(() => import('../features/merchant/promotions/PromotionPage'));
+const MerchantReviews = React.lazy(() => import('../features/merchant/reviews/MerchantReviewsPage'));
 const MerchantProfile = React.lazy(() => import('../features/merchant/profile/MerchantProfilePage'));
-const MerchantReports = React.lazy(() => import('../features/merchant/reports/MerchantDashboard'));
 const MerchantRegister = React.lazy(() => import('../features/merchant/onboarding/RegisterPage'));
 
 const AdminDashboard = React.lazy(() => import('../features/admin/analytics/BIDashboard'));
@@ -100,7 +100,7 @@ export const AppRouter: React.FC = () => {
             <Route path="menu" element={<MenuManager />} />
             <Route path="inventory" element={<MerchantInventory />} />
             <Route path="promotions" element={<MerchantPromotions />} />
-            <Route path="reports" element={<MerchantReports />} />
+            <Route path="reviews" element={<MerchantReviews />} />
             <Route path="profile" element={<MerchantProfile />} />
           </Route>
 

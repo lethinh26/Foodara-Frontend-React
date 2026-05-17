@@ -187,6 +187,14 @@ export const orderService = {
     await apiClient.put(`/v1/orders/${orderId}/cancel`, { reason });
   },
 
+  async reorder(orderId: string): Promise<{ cartId: string; storeId: string; copiedItems: number; skippedItems: number }> {
+    if (env.isMockMode) {
+      await delay(500);
+      return { cartId: '', storeId: '', copiedItems: 0, skippedItems: 0 };
+    }
+    return apiClient.post(`/v1/orders/${orderId}/reorder`, {});
+  },
+
     async getMerchantOrders(restaurantId: string): Promise<Order[]> {
     if (env.isMockMode) {
       await delay(500);

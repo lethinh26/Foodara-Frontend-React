@@ -10,10 +10,16 @@ import {
   Space,
   Tag,
   Avatar,
+  Skeleton,
 } from "antd";
 import { Store, Clock, Phone, MapPin, Mail } from "lucide-react";
-import { merchantService } from "../../../services/merchantService";
-import type { MerchantProfileResponse, StoreOperatingHoursRequest, StoreOperatingHoursResponse, StoreResponse, StoreUpdateRequest } from "../../../types/merchant";
+import { merchantMenuApi, merchantService } from "../../../services/merchantService";
+import type {
+  MerchantProfileResponse,
+  StoreOperatingHoursRequest,
+  StoreResponse,
+  StoreUpdateRequest,
+} from "../../../types/merchant";
 import OperatingHoursModal from "./OperatingHoursModal";
 
 const { Title, Text } = Typography;
@@ -36,161 +42,166 @@ interface OperatingHour {
   isClosed: boolean;
 }
 
-interface profile{
-    name: string;
-    description: string;
-    address: string;
-    phone: string;
-    email: string;
-    approvalStatus: string;
-    prepTime: number;
-    logo: string;
-    coverImage: string;
-    commissionRate: number;
-    settlementCycle: string;
-    bankName: string;
-    bankAccount: string;
+interface ProfileFormValues {
+  storeId: string;
+  name: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  prepTime: number;
+  logo: string;
+  coverImage: string;
 }
 
-
 const MerchantProfilePage: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(true);
+  const [merchant, setMerchant] = useState<MerchantProfileResponse | null>(null);
+  const [primaryStore, setPrimaryStore] = useState<StoreResponse | null>(null);
   const [editing, setEditing] = useState(false);
   const [hoursModalOpen, setHoursModalOpen] = useState(false);
   const [operatingHours, setOperatingHours] = useState<OperatingHour[]>([]);
-  const [originalOperatingHours, setOriginalOperatingHours] = useState<OperatingHour[]>([]);
-  const [originalFormValues, setOriginalFormValues] = useState<any>(null);
+  const [snapshot, setSnapshot] = useState<{
+    formValues: ProfileFormValues;
+    operatingHours: OperatingHour[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [profile, setProfile] = useState<profile>({
-    name: "Phở Hà Nội Xưa",
-    description: "Phở truyền thống Hà Nội, nước dùng ninh xương 12 tiếng",
-    address: "123 Nguyễn Trãi, Quận 1, TP.HCM",
-    phone: "0901111222",
-    email: "merchant@gmail.com",
-    approvalStatus: "pending",
-    prepTime: 10,
-    logo: "https://api.dicebear.com/7.x/initials/svg?seed=PHX",
-    coverImage:
-      "https://images.unsplash.com/photo-1503764654157-72d979d9af2f?w=800",
-    commissionRate: 20,
-    settlementCycle: "Hàng tuần",
-    bankName: "Vietcombank",
-    bankAccount: "****5678",
+  const [form] = Form.useForm<ProfileFormValues>();
+
+  const buildFormValues = (
+    m: MerchantProfileResponse,
+    s: StoreResponse | null,
+  ): ProfileFormValues => ({
+    storeId: s?.id ?? "",
+    name: s?.name ?? m.name,
+    description: s?.description ?? "",
+    address: s?.addressLine ?? "",
+    phone: s?.phone ?? m.businessPhone,
+    email: m.businessEmail,
+    prepTime: s?.avgPreparationTime ?? 0,
+    logo: s?.logoUrl ?? m.logoUrl,
+    coverImage: s?.coverImageUrl ?? m.coverImageUrl,
   });
-
-
-
-
-  const [form] = Form.useForm();
-  const [storeId, setStoreId] = useState<string>("");
 
   useEffect(() => {
     const fetchProfile = async () => {
+      setLoading(true);
       try {
-        const merchant: MerchantProfileResponse = await merchantService.getProfile();
+        const merchantData = await merchantService.getProfile();
+        setMerchant(merchantData);
 
-        setProfile({
-          ...profile,
-          name: merchant.name,
-          phone: merchant.businessPhone,
-          email: merchant.businessEmail,
-          approvalStatus: merchant.approvalStatus,
-          coverImage: merchant.coverImageUrl,
-          logo: merchant.logoUrl,
-        })        
+        const stores = await merchantService.getStores();
+        const first = stores[0] ?? null;
+        setPrimaryStore(first);
 
-        
-
-        const store : StoreResponse[] = await merchantService.getStores();
-        if(store && store[0]){
-          profile.name = store[0].name;
-          profile.description = store[0].description;
-          profile.address = store[0].addressLine;
-          profile.phone = store[0].phone;
-          profile.coverImage = store[0].coverImageUrl;
-          profile.logo = store[0].logoUrl;
-          profile.prepTime = store[0].avgPreparationTime;
-          setStoreId(store[0].id);
-
-          const operation : StoreOperatingHoursResponse[] = await merchantService.getOperatingHours(store[0].id);
-          if(operation && operation.length > 0){
-            setOperatingHours(
-              operation.map((o) => ({
-                dayOfWeek: o.dayOfWeek,
-                openTime: o.openTime,
-                closeTime: o.closeTime,
-                isClosed: o.isClosed,
-              }))
-            );
-          }
+        if (first) {
+          const hours = await merchantService.getOperatingHours(first.id);
+          setOperatingHours(
+            hours.map((o) => ({
+              dayOfWeek: o.dayOfWeek,
+              openTime: o.openTime,
+              closeTime: o.closeTime,
+              isClosed: o.isClosed,
+            })),
+          );
         }
 
-        form.setFieldsValue({...profile, storeId: store[0]?.id});
-        
+        form.setFieldsValue(buildFormValues(merchantData, first));
       } catch (error) {
-        message.error("Không thể tải thông tin profile");
+        const msg = error instanceof Error ? error.message : "Không thể tải thông tin";
+        message.error(msg);
+      } finally {
+        setLoading(false);
       }
     };
     fetchProfile();
-  }, []);
+  }, [form]);
 
-  const handleSave = async () => {
+  const handleSave = async (values: ProfileFormValues) => {
+    if (!values.storeId) {
+      message.error("Chưa có chi nhánh để cập nhật");
+      return;
+    }
+    setSaving(true);
     try {
-      const values = form.getFieldsValue();
-      
-      const store : StoreUpdateRequest = {
+      const update: StoreUpdateRequest = {
         name: values.name,
         description: values.description,
         addressLine: values.address,
         phone: values.phone,
         coverImageUrl: values.coverImage,
         logoUrl: values.logo,
-        avgPreparationTime: values.prepTime,
-      }
-      if(store){
-        console.log(store);
-        
-        await merchantService.updateStore(values.storeId || storeId, store);
-        console.log(2);
-      }
+        avgPreparationTime: Number(values.prepTime),
+      };
+      const updated = await merchantService.updateStore(values.storeId, update);
+      setPrimaryStore(updated);
 
-      // update store operating hours
-      console.log(operatingHours);
       if (operatingHours.length > 0) {
-        const hoursPayload: StoreOperatingHoursRequest[] = operatingHours.map((h) => ({
+        const payload: StoreOperatingHoursRequest[] = operatingHours.map((h) => ({
           dayOfWeek: h.dayOfWeek,
           openTime: h.openTime,
           closeTime: h.closeTime,
           isClosed: h.isClosed,
         }));
-        await merchantService.updateOperatingHours(values.storeId || storeId, hoursPayload);
-        console.log(3);
+        await merchantService.updateOperatingHours(values.storeId, payload);
       }
 
-      message.success("Đã lưu!");
+      message.success("Đã lưu thay đổi");
       setEditing(false);
+      setSnapshot(null);
     } catch (error) {
-      message.error("Không thể lưu thông tin");
+      const msg = error instanceof Error ? error.message : "Không thể lưu thông tin";
+      message.error(msg);
+    } finally {
+      setSaving(false);
     }
-  }
+  };
 
-  // Group consecutive days with same hours for summary display
-  const getOperatingHoursSummary = () => {
+  const toggleOpen = async () => {
+    if (!primaryStore) return;
+    try {
+      const updated = await merchantService.toggleStore(primaryStore.id);
+      setPrimaryStore(updated);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Không thể đổi trạng thái";
+      message.error(msg);
+    }
+  };
+
+  const handleEditToggle = () => {
+    if (!editing) {
+      setSnapshot({
+        formValues: form.getFieldsValue(),
+        operatingHours: [...operatingHours],
+      });
+      setEditing(true);
+    } else {
+      if (snapshot) {
+        form.setFieldsValue(snapshot.formValues);
+        setOperatingHours(snapshot.operatingHours);
+      }
+      setEditing(false);
+    }
+  };
+
+  const summaryGroups = (() => {
     if (operatingHours.length === 0) return null;
-
     const sorted = DAY_ORDER.map(
       (d) =>
-        operatingHours.find((h) => h.dayOfWeek === d) || {
+        operatingHours.find((h) => h.dayOfWeek === d) ?? {
           dayOfWeek: d,
           openTime: "",
           closeTime: "",
           isClosed: true,
-        }
+        },
     );
-
-    // Group days with same schedule
-    const groups: { days: number[]; openTime: string; closeTime: string; isClosed: boolean }[] = [];
-
+    const groups: {
+      days: number[];
+      openTime: string;
+      closeTime: string;
+      isClosed: boolean;
+    }[] = [];
     sorted.forEach((h) => {
       const last = groups[groups.length - 1];
       if (
@@ -209,27 +220,23 @@ const MerchantProfilePage: React.FC = () => {
         });
       }
     });
-
     return groups;
-  };
+  })();
 
-  const summaryGroups = getOperatingHoursSummary();
+  if (loading) return <Skeleton active />;
 
-  const handleEdit = () => {
-    if (!editing) {
-      // Bắt đầu edit: Lưu lại dữ liệu hiện tại
-      setOriginalOperatingHours([...operatingHours]);
-      setOriginalFormValues(form.getFieldsValue());
-      setEditing(true);
-    } else {
-      // Hủy edit: Khôi phục lại dữ liệu cũ
-      setOperatingHours(originalOperatingHours);
-      if (originalFormValues) {
-        form.setFieldsValue(originalFormValues);
-      }
-      setEditing(false);
-    }
-  };
+  if (!merchant) {
+    return (
+      <div className="animate-fade-in">
+        <Title level={4}>Hồ sơ đối tác</Title>
+        <Card>
+          <Text type="secondary">Chưa có hồ sơ merchant. Vui lòng đăng ký trước.</Text>
+        </Card>
+      </div>
+    );
+  }
+
+  const isOpen = primaryStore?.isOpen ?? false;
 
   return (
     <div className="animate-fade-in">
@@ -249,12 +256,10 @@ const MerchantProfilePage: React.FC = () => {
             <Text>Trạng thái quán:</Text>
             <Switch
               checked={isOpen}
-              onChange={(v) => {
-                setIsOpen(v);
-                message.success(v ? "Đã mở quán" : "Đã đóng quán");
-              }}
+              onChange={toggleOpen}
               checkedChildren="Mở"
               unCheckedChildren="Đóng"
+              disabled={!primaryStore}
             />
           </div>
         </Space>
@@ -269,11 +274,13 @@ const MerchantProfilePage: React.FC = () => {
           height: 200,
         }}
       >
-        <img
-          src={profile.coverImage}
-          alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
+        {(primaryStore?.coverImageUrl ?? merchant.coverImageUrl) && (
+          <img
+            src={primaryStore?.coverImageUrl ?? merchant.coverImageUrl}
+            alt=""
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+        )}
         <div
           style={{
             position: "absolute",
@@ -285,13 +292,13 @@ const MerchantProfilePage: React.FC = () => {
           }}
         >
           <Avatar
-            src={profile.logo}
+            src={primaryStore?.logoUrl ?? merchant.logoUrl}
             size={64}
             style={{ border: "3px solid white" }}
           />
           <div>
             <Text style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>
-              {profile.name}
+              {primaryStore?.name ?? merchant.name}
             </Text>
             <br />
             <Tag color={isOpen ? "green" : "red"}>
@@ -304,21 +311,16 @@ const MerchantProfilePage: React.FC = () => {
       <Card
         title="Thông tin cơ bản"
         style={{ borderRadius: 12, marginBottom: 16 }}
-        extra={
-          <Button onClick={handleEdit}>
-            {editing ? "Huỷ" : "Sửa"}
-          </Button>
-        }
+        extra={<Button onClick={handleEditToggle}>{editing ? "Hủy" : "Sửa"}</Button>}
       >
-        <Form
+        <Form<ProfileFormValues>
           form={form}
           layout="vertical"
           disabled={!editing}
-          initialValues={profile}
           onFinish={handleSave}
         >
-          <Form.Item name="storeId" label="Store ID" hidden>
-            <Input prefix={<Store size={14} />} />
+          <Form.Item name="storeId" hidden>
+            <Input />
           </Form.Item>
           <Form.Item name="name" label="Tên quán">
             <Input prefix={<Store size={14} />} />
@@ -329,25 +331,19 @@ const MerchantProfilePage: React.FC = () => {
           <Form.Item name="address" label="Địa chỉ">
             <Input prefix={<MapPin size={14} />} />
           </Form.Item>
-          <div style={{display: "flex", gap: 16}}>
+          <div style={{ display: "flex", gap: 16 }}>
             <Form.Item name="phone" label="Số điện thoại" style={{ flex: 1 }}>
               <Input prefix={<Phone size={14} />} />
             </Form.Item>
             <Form.Item name="email" label="Email" style={{ flex: 1 }}>
-              <Input prefix={<Mail size={14} />} />
+              <Input prefix={<Mail size={14} />} disabled />
             </Form.Item>
           </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "flex-end" }}>
-            <Form.Item
-              name="prepTime"
-              label="TG chuẩn bị (phút)"
-              style={{ flex: 1 }}
-            >
-              <Input />
-            </Form.Item>
-          </div>
+          <Form.Item name="prepTime" label="TG chuẩn bị (phút)">
+            <InputPrep />
+          </Form.Item>
 
-          {/* Operating Hours Section */}
+          {/* Operating Hours */}
           <div
             style={{
               marginTop: 4,
@@ -387,18 +383,11 @@ const MerchantProfilePage: React.FC = () => {
                 icon={<Clock size={13} />}
                 onClick={() => setHoursModalOpen(true)}
                 disabled={!editing}
-                style={{
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
               >
-                {summaryGroups && summaryGroups.length > 0
-                  ? "Chỉnh sửa"
-                  : "Thiết lập"}
+                {summaryGroups && summaryGroups.length > 0 ? "Chỉnh sửa" : "Thiết lập"}
               </Button>
             </div>
 
-            {/* Summary display */}
             {summaryGroups && summaryGroups.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {summaryGroups.map((group, idx) => {
@@ -435,10 +424,7 @@ const MerchantProfilePage: React.FC = () => {
                         {dayRange}
                       </Tag>
                       {group.isClosed ? (
-                        <Text
-                          type="secondary"
-                          style={{ fontSize: 12 }}
-                        >
+                        <Text type="secondary" style={{ fontSize: 12 }}>
                           Nghỉ
                         </Text>
                       ) : (
@@ -460,35 +446,13 @@ const MerchantProfilePage: React.FC = () => {
           </div>
 
           {editing && (
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" loading={saving}>
               Lưu thay đổi
             </Button>
           )}
         </Form>
       </Card>
 
-      <Card title="Thông tin hợp đồng" style={{ borderRadius: 12 }}>
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <Text>Tỷ lệ hoa hồng</Text>
-            <Text strong>{profile.commissionRate}%</Text>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <Text>Chu kỳ đối soát</Text>
-            <Text strong>{profile.settlementCycle}</Text>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <Text>Ngân hàng</Text>
-            <Text strong>{profile.bankName}</Text>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <Text>Số tài khoản</Text>
-            <Text strong>{profile.bankAccount}</Text>
-          </div>
-        </Space>
-      </Card>
-
-      {/* Operating Hours Modal */}
       <OperatingHoursModal
         open={hoursModalOpen}
         onClose={() => setHoursModalOpen(false)}
@@ -498,5 +462,18 @@ const MerchantProfilePage: React.FC = () => {
     </div>
   );
 };
+
+// Wrapper to pass-through Input as numeric without breaking AntD Form binding
+const InputPrep: React.FC<{ value?: number; onChange?: (val: number) => void }> = ({
+  value,
+  onChange,
+}) => (
+  <Input
+    type="number"
+    min={0}
+    value={value ?? ""}
+    onChange={(e) => onChange?.(Number(e.target.value))}
+  />
+);
 
 export default MerchantProfilePage;
