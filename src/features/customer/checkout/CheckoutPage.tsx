@@ -25,6 +25,7 @@ import {
 import { orderService } from '../../../services/orderService';
 import { paymentService } from '../../../services/paymentService';
 import { voucherService } from '../../../services/voucherService';
+import { checkoutService, type CheckoutPreviewResult } from '../../../services/checkoutService';
 import { authService } from '../../../services/authService';
 import { locationService } from '../../../services/locationService';
 import { formatVND } from '../../../utils/format';
@@ -76,6 +77,8 @@ const CheckoutPage: React.FC = () => {
     const [collectingVoucherId, setCollectingVoucherId] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [note, setNote] = useState('');
+    const [preview, setPreview] = useState<CheckoutPreviewResult | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
 
     const [addresses, setAddresses] = useState<AddressResponse[]>([]);
     const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -209,7 +212,10 @@ const CheckoutPage: React.FC = () => {
             await dispatch(fetchCart());
             return pricing;
         } catch (error) {
-            message.error(error instanceof Error ? error.message : 'Không thể cập nhật voucher');
+            // Only show toast for user-initiated actions, not auto-apply attempts
+            if (mode !== 'apply') {
+                message.error(error instanceof Error ? error.message : 'Không thể cập nhật voucher');
+            }
             return null;
         } finally {
             setVoucherLoading(false);
@@ -312,55 +318,68 @@ const CheckoutPage: React.FC = () => {
         const initPlatformId = bestPlatformVoucher?.voucherId;
         const initPlatformV = vouchers.find(v => v.id === initPlatformId);
         if (!initStoreId && !initPlatformId) return;
-        if (initPlatformV?.type === 'free_ship') {
-            void applySelectedVouchers(initStoreId, undefined, initPlatformId);
-        } else {
-            void applySelectedVouchers(initStoreId, initPlatformId, undefined);
-        }
+
+        // Auto-apply best vouchers silently — if they turn out ineligible (e.g. minOrder not met)
+        // just ignore the error rather than spamming toast errors.
+        const tryApply = async () => {
+            try {
+                if (initPlatformV?.type === 'free_ship') {
+                    await applySelectedVouchers(initStoreId, undefined, initPlatformId);
+                } else {
+                    await applySelectedVouchers(initStoreId, initPlatformId, undefined);
+                }
+            } catch {
+                // Voucher is not eligible — silently skip auto-apply
+            }
+        };
+        void tryApply();
     }, [bestPlatformVoucher?.voucherId, bestStoreVoucher?.voucherId, vouchers, selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId]);
 
-    const subtotal = cartTotal || cartItems.reduce((s, i) => s + i.totalPrice, 0);
-    const discountedSubtotal = cartVoucherDiscount > 0 ? cartTotalAfterVoucher : subtotal;
-    const deliveryFee = 15000;
-    const platformFee = Math.min(Math.max(discountedSubtotal * 0.03, 2000), 10000);
+    const subtotal = preview?.subtotal ?? cartTotal ?? cartItems.reduce((s, i) => s + i.totalPrice, 0);
+    const voucherDiscount = preview?.totalDiscount ?? cartVoucherDiscount;
+    const discountedSubtotal = preview?.subtotalAfterVoucher ?? Math.max(subtotal - voucherDiscount, 0);
+    const deliveryFee = preview?.deliveryFee ?? 0;
+    const platformFee = preview?.platformFee ?? 0;
+    const total = preview?.totalAmount ?? Math.max(discountedSubtotal + deliveryFee + platformFee, 0);
     const selectedVoucherIds = [selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId].filter(Boolean) as string[];
-    const voucherDiscount = cartVoucherDiscount;
-    const total = Math.max(discountedSubtotal + deliveryFee + platformFee, 0);
+    void cartTotalAfterVoucher;
 
-    const prevSubtotalRef = React.useRef(subtotal);
+    // Refresh BE preview whenever the inputs that feed into pricing change.
+    // BE is the only source of truth for delivery/platform fees and final total.
     useEffect(() => {
-        if (!restaurant.id || !subtotal) return;
-        if (prevSubtotalRef.current === subtotal) return;
-        prevSubtotalRef.current = subtotal;
+        if (!restaurant.id || cartItems.length === 0) {
+            setPreview(null);
+            return;
+        }
         const timeout = setTimeout(() => {
-            let newStore = selectedStoreVoucherId;
-            let newDisc = selectedSystemDiscountVoucherId;
-            let newShip = selectedSystemShipVoucherId;
-            if (newStore) {
-                const sv = vouchers.find(v => v.id === newStore);
-                if (sv && subtotal < sv.minOrderValue) newStore = undefined;
-            }
-            if (newDisc) {
-                const dv = vouchers.find(v => v.id === newDisc);
-                if (dv && subtotal < dv.minOrderValue) newDisc = undefined;
-            }
-            if (newShip) {
-                const shv = vouchers.find(v => v.id === newShip);
-                if (shv && subtotal < shv.minOrderValue) newShip = undefined;
-            }
-            if (newStore !== selectedStoreVoucherId || newDisc !== selectedSystemDiscountVoucherId || newShip !== selectedSystemShipVoucherId) {
-                setSelectedStoreVoucherId(newStore);
-                setSelectedSystemDiscountVoucherId(newDisc);
-                setSelectedSystemShipVoucherId(newShip);
-            }
-            if (newStore || newDisc || newShip) {
-                void applySelectedVouchers(newStore, newDisc, newShip);
-            } else {
-                void syncVoucherPricing(restaurant.id!, 'available');
-            }
-        }, 600);
+            const run = async () => {
+                setPreviewLoading(true);
+                try {
+                    const result = await checkoutService.preview({
+                        storeId: restaurant.id!,
+                        addressId: selectedAddress || undefined,
+                        platformVoucherId: selectedSystemDiscountVoucherId || selectedSystemShipVoucherId || undefined,
+                        storeVoucherId: selectedStoreVoucherId || undefined,
+                    });
+                    setPreview(result);
+                } catch {
+                    // Keep last preview; the validate-cart card will surface the error.
+                } finally {
+                    setPreviewLoading(false);
+                }
+            };
+            void run();
+        }, 250);
         return () => clearTimeout(timeout);
-    }, [subtotal, restaurant.id]);
+    }, [
+        restaurant.id,
+        selectedAddress,
+        selectedStoreVoucherId,
+        selectedSystemDiscountVoucherId,
+        selectedSystemShipVoucherId,
+        cartItems.length,
+        cartTotal,
+    ]);
 
     const discountSuggestion = (() => {
         const collectedNotMet = vouchers.filter(v => v.isCollected && subtotal < v.minOrderValue);
@@ -643,7 +662,7 @@ const CheckoutPage: React.FC = () => {
                 type="primary"
                 block
                 size="large"
-                loading={loading || cartLoading}
+                loading={loading || cartLoading || previewLoading}
                 onClick={handleOrder}
                 disabled={!selectedAddress || !isStoreOpen || (minOrderAmount > 0 && subtotal < minOrderAmount)}
                 style={{ height: 56, borderRadius: 14, fontWeight: 700, fontSize: 16, boxShadow: '0 4px 16px rgba(76,175,80,0.3)', letterSpacing: 0.3 }}

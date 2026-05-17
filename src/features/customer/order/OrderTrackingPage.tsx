@@ -129,6 +129,38 @@ const OrderTrackingPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Cancellation banner — shown when the merchant or customer cancels the order */}
+      {isCancelled && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            padding: '14px 18px',
+            borderRadius: 14,
+            border: '1px solid rgba(244,67,54,0.25)',
+            background: 'linear-gradient(135deg, rgba(244,67,54,0.06) 0%, rgba(244,67,54,0.12) 100%)',
+            color: '#b71c1c',
+            marginBottom: 20,
+          }}
+        >
+          <AlertTriangle size={22} color="#d32f2f" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <Text strong style={{ color: '#b71c1c', fontSize: 15, display: 'block', marginBottom: 4 }}>
+              Đơn hàng đã bị huỷ
+              {order.cancelledBy === 'store' && ' bởi quán'}
+              {order.cancelledBy === 'customer' && ' bởi bạn'}
+              {order.cancelledBy === 'driver' && ' bởi tài xế'}
+              {order.cancelledBy === 'admin' && ' bởi quản trị'}
+              {order.cancelledBy === 'system' && ' bởi hệ thống'}
+            </Text>
+            <Text style={{ color: '#b71c1c', fontSize: 13 }}>
+              {order.cancelReason ? `Lý do: ${order.cancelReason}` : 'Không có lý do được cung cấp.'}
+            </Text>
+          </div>
+        </div>
+      )}
+
       {/* Order Status Card */}
       <Card style={{ borderRadius: 16, marginBottom: 20, border: 'none', boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>
         {/* Top bar */}
@@ -470,38 +502,61 @@ const OrderTrackingPage: React.FC = () => {
           <Text strong style={{ fontSize: 15 }}>Lịch sử trạng thái</Text>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
-          {/* Vertical line */}
-          <div style={{
-            position: 'absolute', left: 15, top: 20, bottom: 20,
-            width: 2, background: 'var(--border-soft)', zIndex: 0,
-          }} />
+        {(order.statusHistory?.length ?? 0) === 0 ? (
+          <Text type="secondary" style={{ fontSize: 13 }}>Chưa có lịch sử trạng thái.</Text>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
+            {/* Vertical line */}
+            <div style={{
+              position: 'absolute', left: 15, top: 20, bottom: 20,
+              width: 2, background: 'var(--border-soft)', zIndex: 0,
+            }} />
 
-          {order.statusHistory.map((h, i) => (
-            <div key={h.id} style={{
-              display: 'flex', gap: 14, padding: '10px 0',
-              position: 'relative', zIndex: 1,
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                background: i === 0
-                  ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)'
-                  : 'var(--surface)',
-                border: i === 0 ? 'none' : '2px solid var(--border-soft)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+            {(order.statusHistory ?? []).map((h, i) => (
+              <div key={h.id} style={{
+                display: 'flex', gap: 14, padding: '10px 0',
+                position: 'relative', zIndex: 1,
               }}>
-                <CheckCircle2 size={14} color={i === 0 ? '#fff' : ORDER_STATUS_COLORS[h.status]} />
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                  background: i === (order.statusHistory?.length ?? 0) - 1
+                    ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)'
+                    : 'var(--surface)',
+                  border: i === (order.statusHistory?.length ?? 0) - 1 ? 'none' : '2px solid var(--border-soft)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <CheckCircle2
+                    size={14}
+                    color={i === (order.statusHistory?.length ?? 0) - 1 ? '#fff' : ORDER_STATUS_COLORS[h.status]}
+                  />
+                </div>
+                <div style={{ flex: 1, paddingTop: 4 }}>
+                  <Text strong style={{ fontSize: 13, display: 'block' }}>
+                    {ORDER_STATUS_LABELS[h.status] ?? h.status}
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {h.note ? `${h.note} • ` : ''}{formatRelativeTime(h.timestamp)}
+                  </Text>
+                </div>
               </div>
-              <div style={{ flex: 1, paddingTop: 4 }}>
-                <Text strong style={{ fontSize: 13, display: 'block' }}>{ORDER_STATUS_LABELS[h.status]}</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {h.note} • {formatRelativeTime(h.timestamp)}
-                </Text>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Card>
+
+      {/* Review button for completed/delivered orders */}
+      {['delivered', 'completed'].includes(order.status) && (
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Button
+            type="primary"
+            size="large"
+            style={{ borderRadius: 10, fontWeight: 600, height: 44, paddingInline: 32 }}
+            onClick={() => navigate(`/customer/review/${order.id}`)}
+          >
+            ⭐ Đánh giá đơn hàng
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

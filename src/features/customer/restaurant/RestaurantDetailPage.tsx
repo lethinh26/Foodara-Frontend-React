@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Tag, Typography, Space, Button, Tabs, Rate, Badge, Spin, Empty, Modal, Input, message, Tooltip } from 'antd';
-import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft, Ticket } from 'lucide-react';
+import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft, Ticket, AlertTriangle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
 import { addCartItem, fetchCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
 import { addFavorite, removeFavorite, selectIsFavorite } from '../../../store/favoriteSlice';
@@ -9,7 +9,7 @@ import { restaurantService } from '../../../services/restaurantService';
 import { voucherService } from '../../../services/voucherService';
 import { formatVND, formatDistance, formatETA, formatRelativeTime } from '../../../utils/format';
 import type { Restaurant } from '../../../types/restaurant';
-import type { MenuItem, MenuCategory } from '../../../types/menu';
+import type { MenuItem, MenuCategory, ComboOption } from '../../../types/menu';
 import type { Review } from '../../../types/review';
 import type { Voucher } from '../../../types/promotion';
 
@@ -26,6 +26,8 @@ const RestaurantDetailPage: React.FC = () => {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [combos, setCombos] = useState<ComboOption[]>([]);
+  const [addingComboId, setAddingComboId] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [storeVouchers, setStoreVouchers] = useState<Voucher[]>([]);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
@@ -91,16 +93,18 @@ const RestaurantDetailPage: React.FC = () => {
       if (!id) return;
       setLoading(true);
       try {
-        const [rest, cats, items, revs, vouchers] = await Promise.all([
+        const [rest, cats, items, comboList, revs, vouchers] = await Promise.all([
           restaurantService.getRestaurantById(id),
           restaurantService.getMenuCategories(id),
           restaurantService.getMenuItems(id),
+          restaurantService.getCombos(id),
           restaurantService.getReviews(id),
           voucherService.getStoreVouchers(id),
         ]);
         setRestaurant(rest);
         setCategories(cats);
         setMenuItems(items);
+        setCombos(comboList);
         setReviews(revs);
         setStoreVouchers(vouchers);
       } finally {
@@ -145,6 +149,36 @@ const RestaurantDetailPage: React.FC = () => {
       message.error(error instanceof Error ? error.message : 'Không thể thu thập voucher. Vui lòng thử lại.');
     } finally {
       setCollectingVoucherId(null);
+    }
+  };
+
+  const handleAddCombo = async (combo: ComboOption) => {
+    if (!restaurant) return;
+    setAddingComboId(combo.id);
+    try {
+      await dispatch(addCartItem({
+        storeId: restaurant.id,
+        storeName: restaurant.name,
+        comboId: combo.id,
+        quantity: 1,
+        optionItemIds: [],
+        specialInstructions: '',
+        itemPreview: {
+          name: combo.name,
+          image: combo.imageUrl ?? '',
+          basePrice: combo.price,
+          selectedSize: null,
+          selectedToppings: [],
+        },
+      })).unwrap();
+      message.success(`Đã thêm combo "${combo.name}" vào giỏ`);
+    } catch (error) {
+      const text = typeof error === 'string'
+        ? error
+        : (error instanceof Error ? error.message : 'Không thể thêm combo vào giỏ');
+      message.error(text);
+    } finally {
+      setAddingComboId(null);
     }
   };
 
@@ -231,6 +265,19 @@ const RestaurantDetailPage: React.FC = () => {
   const cartCount = useMemo(() => cartItems.reduce((s, i) => s + i.quantity, 0), [cartItems]);
   const storeOnlyVouchers = useMemo(() => storeVouchers.filter(v => v.scope === 'store'), [storeVouchers]);
 
+  // Backend resolves "is the store currently accepting orders?" by combining
+  // the merchant's manual switch with today's operating hours.
+  const isStoreOpenNow = restaurant ? (restaurant.isOpenNow ?? restaurant.status === 'open') : false;
+  const closeReasonLabel: Record<string, string> = {
+    merchant_closed: 'Quán đang tạm đóng cửa',
+    inactive: 'Quán hiện không hoạt động',
+    day_off: 'Hôm nay quán nghỉ',
+    outside_hours: 'Hiện chưa tới giờ mở cửa',
+  };
+  const closedHeadline = restaurant?.closeReason
+    ? closeReasonLabel[restaurant.closeReason] ?? 'Quán đang đóng cửa'
+    : 'Quán đang đóng cửa';
+
   if (loading) return <div style={{ textAlign: 'center', padding: 48 }}><Spin size="large" /></div>;
   if (!restaurant) return <Empty description="Không tìm thấy quán ăn" />;
 
@@ -294,6 +341,34 @@ const RestaurantDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {!isStoreOpenNow && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            padding: '14px 18px',
+            borderRadius: 14,
+            border: '1px solid rgba(244,67,54,0.25)',
+            background: 'linear-gradient(135deg, rgba(244,67,54,0.06) 0%, rgba(244,67,54,0.12) 100%)',
+            color: '#b71c1c',
+            marginBottom: 20,
+          }}
+        >
+          <AlertTriangle size={22} color="#d32f2f" style={{ flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <Text strong style={{ color: '#b71c1c', fontSize: 15, display: 'block', marginBottom: 4 }}>
+              {closedHeadline}
+            </Text>
+            <Text style={{ color: '#b71c1c', fontSize: 13 }}>
+              {restaurant?.nextOpenTime
+                ? `Mở lại lúc ${restaurant.nextOpenTime}.`
+                : 'Bạn vẫn có thể xem thực đơn — không thể đặt món lúc này.'}
+            </Text>
+          </div>
+        </div>
+      )}
 
       <Card style={{ marginBottom: 20, borderRadius: 16, border: 'none', boxShadow: 'var(--shadow-md)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -411,6 +486,74 @@ const RestaurantDetailPage: React.FC = () => {
           key: 'menu', label: 'Thực đơn',
           children: (
             <div>
+              {/* Combo section */}
+              {combos.length > 0 && (
+                <div style={{ marginBottom: 32 }}>
+                  <Title level={5} style={{ marginBottom: 16 }}>🎁 Combo ưu đãi</Title>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                    {combos.map(combo => {
+                      const savings = combo.originalPrice > combo.price
+                        ? combo.originalPrice - combo.price
+                        : 0;
+                      const disabled = !combo.isAvailable || !isStoreOpenNow;
+                      return (
+                        <Card
+                          key={combo.id}
+                          hoverable={!disabled}
+                          style={{ borderRadius: 12, opacity: disabled ? 0.5 : 1 }}
+                          styles={{ body: { padding: 12 } }}
+                        >
+                          <div style={{ display: 'flex', gap: 12 }}>
+                            {combo.imageUrl ? (
+                              <img
+                                src={combo.imageUrl}
+                                alt={combo.name}
+                                style={{ width: 90, height: 90, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: 90, height: 90, borderRadius: 10, flexShrink: 0,
+                                background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32,
+                              }}>🎁</div>
+                            )}
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                              <Text strong style={{ fontSize: 14 }}>{combo.name}</Text>
+                              {combo.items.length > 0 && (
+                                <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.3 }} ellipsis={{ tooltip: true }}>
+                                  {combo.items.map(it => `${it.quantity}× ${it.itemName}`).join(', ')}
+                                </Text>
+                              )}
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 'auto' }}>
+                                <Text strong style={{ color: 'var(--primary)', fontSize: 15 }}>{formatVND(combo.price)}</Text>
+                                {savings > 0 && (
+                                  <Text delete type="secondary" style={{ fontSize: 12 }}>{formatVND(combo.originalPrice)}</Text>
+                                )}
+                              </div>
+                              {savings > 0 && (
+                                <Tag color="orange" style={{ alignSelf: 'flex-start', margin: 0, fontSize: 10 }}>
+                                  Tiết kiệm {formatVND(savings)}
+                                </Tag>
+                              )}
+                              <Button
+                                type="primary"
+                                size="small"
+                                disabled={disabled}
+                                loading={addingComboId === combo.id}
+                                onClick={() => void handleAddCombo(combo)}
+                                style={{ alignSelf: 'flex-end', marginTop: 4 }}
+                                icon={<Plus size={14} />}
+                              >
+                                Thêm combo
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {categories.map(cat => {
                 const items = menuItems.filter(i => i.categoryId === cat.id);
                 if (items.length === 0) return null;
@@ -423,8 +566,11 @@ const RestaurantDetailPage: React.FC = () => {
                   >
                     <Title level={5} style={{ marginBottom: 16 }}>{cat.name}</Title>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {items.map(item => (
-                        <Card key={item.id} hoverable style={{ borderRadius: 12, opacity: item.isAvailable ? 1 : 0.5 }} onClick={() => item.isAvailable && openItemModal(item)}>
+                      {items.map(item => {
+                        const isOutOfStock = item.stockQuantity !== null && item.stockQuantity <= 0;
+                        const isDisabled = !item.isAvailable || isOutOfStock || !isStoreOpenNow;
+                        return (
+                        <Card key={item.id} hoverable={!isDisabled} style={{ borderRadius: 12, opacity: isDisabled ? 0.5 : 1 }} onClick={() => !isDisabled && openItemModal(item)}>
                           <div style={{ display: 'flex', gap: 16 }}>
                             <img src={item.image} alt={item.name} style={{ width: 100, height: 100, borderRadius: 10, objectFit: 'cover' }} />
                             <div style={{ flex: 1 }}>
@@ -433,7 +579,10 @@ const RestaurantDetailPage: React.FC = () => {
                                   <Text strong>{item.name}</Text>
                                   {item.isBestSeller && <Tag color="orange" style={{ marginLeft: 8 }}>Bán chạy</Tag>}
                                   {item.isNew && <Tag color="green" style={{ marginLeft: 4 }}>Mới</Tag>}
-                                  {!item.isAvailable && <Tag color="red" style={{ marginLeft: 4 }}>Hết hàng</Tag>}
+                                  {(!item.isAvailable || isOutOfStock) && <Tag color="red" style={{ marginLeft: 4 }}>Hết hàng</Tag>}
+                                  {item.stockQuantity !== null && item.stockQuantity > 0 && item.stockQuantity <= 5 && (
+                                    <Tag color="volcano" style={{ marginLeft: 4 }}>Còn {item.stockQuantity}</Tag>
+                                  )}
                                   {item.pricing.bestVoucherCode && (
                                     <Tooltip title={`Voucher tốt nhất: ${item.pricing.bestVoucherCode}`}>
                                       <Tag color="blue" style={{ marginLeft: 4 }}>{item.pricing.bestVoucherCode}</Tag>
@@ -453,12 +602,19 @@ const RestaurantDetailPage: React.FC = () => {
                                     <Text strong style={{ color: 'var(--primary)', fontSize: 15 }}>{formatVND(item.basePrice)}</Text>
                                   )}
                                 </div>
-                                {item.isAvailable && <Button type="primary" size="small" shape="circle" icon={<Plus size={14} />} />}
+                                {!isDisabled && (
+                                  <Button
+                                    type="primary"
+                                    size="small"
+                                    shape="circle"
+                                    icon={<Plus size={14} />}
+                                  />
+                                )}
                               </div>
                             </div>
                           </div>
                         </Card>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 );
@@ -677,9 +833,10 @@ const RestaurantDetailPage: React.FC = () => {
                   size="large"
                   onClick={handleAddToCart}
                   loading={addingToCart}
+                  disabled={!isStoreOpenNow}
                   style={{ borderRadius: 12, fontWeight: 600, minWidth: 200, height: 48, fontSize: 15 }}
                 >
-                  Thêm — {formatVND(getItemPrice())}
+                  {isStoreOpenNow ? `Thêm — ${formatVND(getItemPrice())}` : 'Quán đang đóng'}
                 </Button>
               </div>
             </div>

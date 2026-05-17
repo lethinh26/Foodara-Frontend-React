@@ -42,6 +42,16 @@ export interface Restaurant {
   merchantId: string;
   createdAt: string;
   updatedAt: string;
+
+  /** True only when the merchant flag + today's operating hours both allow ordering. */
+  isOpenNow?: boolean;
+  /**
+   * Lý do quán đang đóng:
+   * {@code merchant_closed} | {@code inactive} | {@code day_off} | {@code outside_hours}.
+   */
+  closeReason?: 'merchant_closed' | 'inactive' | 'day_off' | 'outside_hours' | string;
+  /** ISO local-time string (HH:mm) for the next opening; absent when unknown. */
+  nextOpenTime?: string;
 }
 
 export interface MerchantProfile {

@@ -25,10 +25,11 @@ export interface Voucher {
   collectedAt: string | null;
   potentialDiscount: number;
 
-  // them
+  // Backend raw aliases (used by merchant promotion page that reads raw responses)
   startsAt?: string;
   expiresAt?: string;
   totalQuantity?: number;
+  usedQuantity?: number;
   discountType?: string;
 }
 

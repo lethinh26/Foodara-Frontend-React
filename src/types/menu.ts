@@ -36,6 +36,8 @@ export interface ToppingGroup {
 export interface ComboOption {
   id: string;
   name: string;
+  description?: string;
+  imageUrl?: string;
   items: ComboItem[];
   price: number;
   originalPrice: number;
@@ -81,6 +83,8 @@ export interface MenuItem {
   isNew: boolean;
   isBestSeller: boolean;
   maxQuantity: number;
+  /** Remaining stock (only when merchant has trackInventory enabled, otherwise null). */
+  stockQuantity: number | null;
   preparationTime: number; // minutes
   calories: number;
   tags: string[];

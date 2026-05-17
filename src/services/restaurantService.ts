@@ -5,7 +5,7 @@ import { mockRestaurants, mockCategories } from '../mocks/restaurants';
 import { mockMenuItems, mockMenuCategories } from '../mocks/menuItems';
 import { mockReviews } from '../mocks/orders';
 import type { Restaurant, RestaurantCategory, RestaurantFilters } from '../types/restaurant';
-import type { MenuItem, MenuCategory, MenuItemPricing } from '../types/menu';
+import type { MenuItem, MenuCategory, MenuItemPricing, ComboOption } from '../types/menu';
 import type { Review } from '../types/review';
 
 // Backend response interfaces
@@ -36,6 +36,12 @@ interface BackendStoreResponse {
   distance?: number;
   is_open?: boolean;
   isOpen?: boolean;
+  is_open_now?: boolean;
+  isOpenNow?: boolean;
+  close_reason?: string;
+  closeReason?: string;
+  next_open_time?: string;
+  nextOpenTime?: string;
   is_featured?: boolean;
   isFeatured?: boolean;
   is_new?: boolean;
@@ -123,12 +129,16 @@ interface BackendOptionGroupResponse {
 
 interface BackendMenuItemDetailResponse extends BackendMenuItemResponse {
   optionGroups?: BackendOptionGroupResponse[];
+  stockQuantity?: number | null;
+  trackInventory?: boolean;
 }
 
 interface BackendComboResponse {
   id: string;
   storeId?: string;
   name: string;
+  description?: string;
+  imageUrl?: string;
   comboPrice?: number;
   originalPrice?: number;
   isActive?: boolean;
@@ -205,6 +215,9 @@ function mapBackendStore(s: BackendStoreResponse): Restaurant {
     merchantId: s.merchant_id || s.merchantId || '',
     createdAt: s.created_at || s.createdAt || '',
     updatedAt: s.created_at || s.createdAt || '',
+    isOpenNow: s.is_open_now ?? s.isOpenNow,
+    closeReason: s.close_reason ?? s.closeReason,
+    nextOpenTime: s.next_open_time ?? s.nextOpenTime,
   };
 }
 
@@ -262,6 +275,7 @@ function mapBackendMenuItem(m: BackendMenuItemResponse, restaurantId: string): M
     isNew: m.isNew ?? false,
     isBestSeller: m.isPopular ?? false,
     maxQuantity: Number(m.maxQuantityPerOrder || 10),
+    stockQuantity: null,
     preparationTime: 15,
     calories: 0,
     tags: [],
@@ -316,6 +330,7 @@ function mapBackendMenuItemDetail(m: BackendMenuItemDetailResponse, restaurantId
     pricing: mapPricing(m),
     sizes,
     toppingGroups,
+    stockQuantity: m.stockQuantity ?? null,
   };
 }
 
@@ -332,6 +347,8 @@ function mapBackendCombo(combo: BackendComboResponse) {
   return {
     id: String(combo.id || ''),
     name: String(combo.name || ''),
+    description: combo.description ? String(combo.description) : undefined,
+    imageUrl: combo.imageUrl ? String(combo.imageUrl) : undefined,
     price: Number(combo.comboPrice || 0),
     originalPrice: Number(combo.originalPrice || combo.comboPrice || 0),
     isAvailable: combo.isActive ?? true,
@@ -348,14 +365,14 @@ function mapBackendReview(r: BackendReviewResponse): Review {
     id: String(r.id || ''),
     orderId: String(r.order_id || ''),
     customerId: String(r.customer_id || ''),
-    customerName: String(r.customer_name || 'Khách hàng'),
-    customerAvatar: String(r.customer_avatar || ''),
-    restaurantId: String(r.store_id || ''),
+    customerName: String(r.customer_name || (r as Record<string, unknown>).customerName || 'Khách hàng'),
+    customerAvatar: String(r.customer_avatar || (r as Record<string, unknown>).customerAvatar || ''),
+    restaurantId: String(r.store_id || (r as Record<string, unknown>).storeId || ''),
     driverId: r.driver_id ? String(r.driver_id) : null,
-    restaurantRating: Number(r.store_rating || 0),
+    restaurantRating: Number(r.store_rating ?? (r as Record<string, unknown>).storeRating ?? 0),
     driverRating: r.driver_rating != null ? Number(r.driver_rating) : null,
     foodRating: Number(r.food_rating || 0),
-    comment: String(r.comment || ''),
+    comment: String(r.comment ?? (r as Record<string, unknown>).storeComment ?? ''),
     tags: r.tags || [],
     images: r.images || [],
     reply: r.reply ? {
@@ -499,16 +516,7 @@ export const restaurantService = {
     try {
       // Try to get menu items with option groups first
       const items = await apiClient.get<BackendMenuItemDetailResponse[]>(`/v1/stores/${restaurantId}/menu-items-detail`);
-      const menuItems = items.map(m => mapBackendMenuItemDetail(m, restaurantId));
-      try {
-        const combos = await apiClient.get<BackendComboResponse[]>(`/v1/stores/${restaurantId}/combos`);
-        if (menuItems.length > 0) {
-          menuItems[0].comboOptions = combos.map(mapBackendCombo);
-        }
-      } catch {
-        // Combos are optional; keep menu rendering available without them.
-      }
-      return menuItems;
+      return items.map(m => mapBackendMenuItemDetail(m, restaurantId));
     } catch (e) {
       console.warn("Failed to fetch menu items with options, falling back to basic", e);
       try {
@@ -517,6 +525,19 @@ export const restaurantService = {
       } catch (e2) {
         return mockMenuItems.filter(i => i.restaurantId === restaurantId);
       }
+    }
+  },
+
+  async getCombos(restaurantId: string): Promise<ComboOption[]> {
+    if (env.isMockMode) {
+      await delay(200);
+      return [];
+    }
+    try {
+      const combos = await apiClient.get<BackendComboResponse[]>(`/v1/stores/${restaurantId}/combos`);
+      return combos.map(mapBackendCombo);
+    } catch {
+      return [];
     }
   },
 
@@ -529,7 +550,7 @@ export const restaurantService = {
       const items = await apiClient.get<BackendReviewResponse[]>(`/v1/stores/${restaurantId}/reviews`);
       return items.map(mapBackendReview);
     } catch {
-      return mockReviews.filter(r => r.restaurantId === restaurantId);
+      return [];
     }
   },
 };

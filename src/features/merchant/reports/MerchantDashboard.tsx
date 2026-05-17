@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Card, Row, Col, Typography, DatePicker, message } from "antd";
+import { Card, Row, Col, Typography, DatePicker, Skeleton, Empty, message } from "antd";
 import {
   ShoppingBag,
   DollarSign,
   Clock,
   CheckCircle2,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -18,92 +15,89 @@ import {
   Line,
   CartesianGrid,
   Legend,
+  ComposedChart,
 } from "recharts";
+import { type Dayjs } from "dayjs";
 import { formatVND } from "../../../utils/format";
 import {
   merchantReportApi,
   merchantService,
 } from "../../../services/merchantService";
+import type { MerchantRevenuePoint } from "../../../types/merchant";
+import type { StoreResponse } from "../../../types/merchant";
 
 const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
 
-// report revenue and order
-const revenueDataMock = [
-  { day: "T2", revenue: 4500000, orders: 32 },
-  { day: "T3", revenue: 5200000, orders: 38 },
-  { day: "T4", revenue: 4800000, orders: 35 },
-  { day: "T5", revenue: 6100000, orders: 42 },
-  { day: "T6", revenue: 7200000, orders: 51 },
-  { day: "T7", revenue: 8500000, orders: 62 },
-  { day: "CN", revenue: 7800000, orders: 55 },
-];
+interface StatCard {
+  title: string;
+  value: number | string;
+  icon: React.ReactNode;
+  color: string;
+  isVND?: boolean;
+  suffix?: string;
+}
 
-// report order 
-const statsCards = [
-  {
-    title: "Số Đơn ",
-    value: 42,
-    icon: <ShoppingBag size={20} />,
-    // change: 12,
-    color: "var(--primary)",
-  },
-  {
-    title: "Tổng Doanh thu Doanh thu ",
-    value: 6350000,
-    icon: <DollarSign size={20} />,
-    // change: 8.5,
-    color: "var(--secondary)",
-    isVND: true,
-  },
-  {
-    title: "TG chuẩn bị TB",
-    value: 12,
-    icon: <Clock size={20} />,
-    // change: -15,
-    color: "var(--info)",
-    suffix: "phút",
-  },
-  {
-    title: "Tỷ lệ hoàn thành",
-    value: 97.5,
-    icon: <CheckCircle2 size={20} />,
-    // change: 2.1,
-    color: "var(--success)",
-    suffix: "%",
-  },
-];
+const DATE_FORMAT = "YYYY-MM-DD";
 
 const MerchantDashboard: React.FC = () => {
-  const [statsCardsData, setStatsCardsData] = useState(statsCards);
-  const [ revenueData, setRevenueData] = useState(revenueDataMock);
+  const [stores, setStores] = useState<StoreResponse[]>([]);
+  const [stats, setStats] = useState<StatCard[]>([]);
+  const [revenueData, setRevenueData] = useState<MerchantRevenuePoint[]>([]);
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const loadingData = async () => {
-    try {
-        const stores = await merchantService.getStores();
-        // total overview
-        const totalRevenue = await merchantReportApi.totalRevenue(stores[0].id)
-        const totalOrder = await merchantReportApi.totalOrder(stores[0].id)
-        const avgtime = await merchantReportApi.avgtime(stores[0].id)
-        const successRate = await merchantReportApi.successRate(stores[0].id)
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const fetchedStores = await merchantService.getStores();
+        setStores(fetchedStores);
+      } catch {
+        message.error("Không thể tải danh sách cửa hàng");
+      }
+    };
+    init();
+  }, []);
 
-        setStatsCardsData([
+  useEffect(() => {
+    const storeId = stores[0]?.id;
+    if (!storeId) {
+      setLoading(false);
+      return;
+    }
+
+    const startDate = range?.[0]?.format(DATE_FORMAT);
+    const endDate = range?.[1]?.format(DATE_FORMAT);
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [totalRevenue, totalOrder, avgTime, successRate, revenuePoints] =
+          await Promise.all([
+            merchantReportApi.totalRevenue(storeId),
+            merchantReportApi.totalOrder(storeId),
+            merchantReportApi.avgtime(storeId),
+            merchantReportApi.successRate(storeId),
+            merchantReportApi.revenueAll(storeId, startDate, endDate),
+          ]);
+
+        setStats([
           {
-            title: "Số Đơn ",
+            title: "Số đơn",
             value: totalOrder,
             icon: <ShoppingBag size={20} />,
             color: "var(--primary)",
           },
           {
-            title: "Tổng Doanh thu ",
+            title: "Tổng doanh thu",
             value: totalRevenue,
             icon: <DollarSign size={20} />,
             color: "var(--secondary)",
             isVND: true,
-
           },
           {
             title: "TG chuẩn bị TB",
-            value: avgtime,
+            value: avgTime,
             icon: <Clock size={20} />,
             color: "var(--info)",
             suffix: " phút",
@@ -115,20 +109,18 @@ const MerchantDashboard: React.FC = () => {
             color: "var(--success)",
             suffix: "%",
           },
-        ])
-
-        const revenue = await merchantReportApi.revenueAll(stores[0].id, "", "")
-        setRevenueData(revenue)
-                
-      } catch (error: any) {
-        message.error(error.message || "");
+        ]);
+        setRevenueData(revenuePoints);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Không thể tải báo cáo";
+        message.error(msg);
+      } finally {
+        setLoading(false);
       }
-  }
+    };
 
-
-  useEffect(() => {
-    loadingData();
-  }, []);
+    load();
+  }, [stores, range]);
 
   return (
     <div className="animate-fade-in">
@@ -143,120 +135,110 @@ const MerchantDashboard: React.FC = () => {
         <Title level={4} style={{ margin: 0 }}>
           Dashboard
         </Title>
-        <DatePicker.RangePicker />
+        <RangePicker
+          value={range}
+          onChange={(values) => {
+            if (values && values[0] && values[1]) {
+              setRange([values[0], values[1]]);
+            } else {
+              setRange(null);
+            }
+          }}
+          format={DATE_FORMAT}
+        />
       </div>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {statsCardsData.map((stat, i) => (
-          <Col key={i} xs={12} sm={12} md={6}>
-            <Card
-              // style={{ borderRadius: 12, borderTop: `3px solid ${stat.color}` }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {stat.title}
-                  </Text>
+      {loading ? (
+        <Skeleton active paragraph={{ rows: 6 }} />
+      ) : stores.length === 0 ? (
+        <Empty description="Chưa có cửa hàng nào" />
+      ) : (
+        <>
+          <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+            {stats.map((stat, i) => (
+              <Col key={i} xs={12} sm={12} md={6}>
+                <Card>
                   <div
                     style={{
-                      fontSize: 24,
-                      fontWeight: 700,
-                      color: stat.color,
-                      marginTop: 4,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
                     }}
                   >
-                    {stat.isVND ? formatVND(stat.value) : stat.value}
-                    {stat.suffix}
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {stat.title}
+                      </Text>
+                      <div
+                        style={{
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: stat.color,
+                          marginTop: 4,
+                        }}
+                      >
+                        {stat.isVND ? formatVND(Number(stat.value)) : stat.value}
+                        {stat.suffix}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: `${stat.color}15`,
+                        borderRadius: 10,
+                        padding: 8,
+                      }}
+                    >
+                      {stat.icon}
+                    </div>
                   </div>
-                </div>
-                <div
-                  style={{
-                    background: `${stat.color}15`,
-                    borderRadius: 10,
-                    padding: 8,
-                  }}
-                >
-                  {stat.icon}
-                </div>
-              </div>
-              {/* <div
-                style={{
-                  marginTop: 8,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  fontSize: 12,
-                }}
-              >
-                {stat.change > 0 ? (
-                  <ArrowUpRight size={14} color="var(--success)" />
-                ) : (
-                  <ArrowDownRight
-                    size={14}
-                    color={stat.change < 0 ? "var(--success)" : "var(--danger)"}
-                  />
-                )}
-                <Text
-                  style={{
-                    color:
-                      stat.change > 0 ? "var(--success)" : "var(--success)",
-                    fontSize: 12,
-                  }}
-                >
-                  {Math.abs(stat.change)}%
-                </Text>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  so với tuần trước
-                </Text>
-              </div> */}
-            </Card>
-          </Col>
-        ))}
-      </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
 
-      <Card
-        title="Doanh thu & Đơn hàng tuần"
-        style={{ borderRadius: 12, marginBottom: 24 }}
-      >
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={revenueData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
-            <XAxis dataKey="day" />
-            <YAxis
-              yAxisId="left"
-              tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`}
-            />
-            <YAxis yAxisId="right" orientation="right" />
-            <Tooltip
-              formatter={(value, name) => [
-                name === "revenue" ? formatVND(value as number) : value,
-                name === "revenue" ? "Doanh thu" : "Đơn hàng",
-              ]}
-            />
-            <Legend />
-            <Bar
-              yAxisId="left"
-              dataKey="revenue"
-              name="Doanh thu"
-              fill="var(--primary)"
-              radius={[4, 4, 0, 0]}
-            />
-            <Line
-              yAxisId="right"
-              dataKey="orders"
-              name="Đơn hàng"
-              stroke="var(--secondary)"
-              strokeWidth={2}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
+          <Card
+            title="Doanh thu & Đơn hàng"
+            style={{ borderRadius: 12, marginBottom: 24 }}
+          >
+            {revenueData.length === 0 ? (
+              <Empty description="Chưa có dữ liệu trong khoảng thời gian này" />
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <ComposedChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-soft)" />
+                  <XAxis dataKey="day" />
+                  <YAxis
+                    yAxisId="left"
+                    tickFormatter={(v: number) => `${(v / 1_000_000).toFixed(0)}M`}
+                  />
+                  <YAxis yAxisId="right" orientation="right" />
+                  <Tooltip
+                    formatter={(value, name) => [
+                      name === "revenue" ? formatVND(Number(value)) : value,
+                      name === "revenue" ? "Doanh thu" : "Đơn hàng",
+                    ]}
+                  />
+                  <Legend />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="revenue"
+                    name="Doanh thu"
+                    fill="var(--primary)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Line
+                    yAxisId="right"
+                    dataKey="orders"
+                    name="Đơn hàng"
+                    stroke="var(--secondary)"
+                    strokeWidth={2}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   );
 };

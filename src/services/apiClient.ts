@@ -27,6 +27,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'Full name is required': 'Vui lòng nhập họ tên',
   'Label is required': 'Vui lòng chọn loại địa chỉ',
   'Full address is required': 'Vui lòng nhập địa chỉ',
+  'Menu item is out of stock': 'Một số món đã hết hàng, vui lòng kiểm tra lại giỏ hàng',
 };
 
 function translateMessage(msg: string): string {
