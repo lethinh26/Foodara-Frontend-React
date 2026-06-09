@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { Layout, Menu, Avatar, Badge, Button, message, Typography } from "antd";
+import { Layout, Menu, Avatar, Badge, Button, Typography } from "antd";
 import {
     LayoutDashboard,
     UtensilsCrossed,
     Package,
-    ChefHat,
     ClipboardList,
     Truck,
     Megaphone,
@@ -18,9 +17,10 @@ import {
 import { useAppSelector, useAppDispatch } from "../hooks/useStore";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { selectUser, logout } from "../store/authSlice";
-import { selectUnreadCount } from "../store/notificationSlice";
+import { selectUnreadCount, addNotification } from "../store/notificationSlice";
 import { authService } from "../services/authService";
 import { merchantService } from "../services/merchantService";
+import NotificationPanel from "../components/NotificationPanel";
 import type { MerchantOrder } from "../types/merchant";
 
 const { Header, Sider, Content } = Layout;
@@ -32,9 +32,7 @@ const menuItems = [
         icon: <ClipboardList size={18} />,
         label: "Đơn hàng",
     },
-    { key: "/merchant/kitchen", icon: <ChefHat size={18} />, label: "Bếp" },
-    {
-        key: "/merchant/handover",
+    { key: "/merchant/handover",
         icon: <Truck size={18} />,
         label: "Giao tài xế",
     },
@@ -61,8 +59,7 @@ export const MerchantLayout: React.FC = () => {
     const unreadCount = useAppSelector(selectUnreadCount);
     const [collapsed, setCollapsed] = useState(false);
     const [storeId, setStoreId] = useState<string | null>(null);
-
-    const [seenOrderIds] = useState<Set<string>>(() => new Set());
+    const [notifOpen, setNotifOpen] = useState(false);
 
     const selectedKey =
         menuItems
@@ -99,15 +96,8 @@ export const MerchantLayout: React.FC = () => {
     useWebSocket<Partial<MerchantOrder>>({
         topic: storeId ? `/topic/merchant.${storeId}.orders` : undefined,
         onMessage: (msg) => {
-            if (!msg?.id || seenOrderIds.has(msg.id)) return;
-            seenOrderIds.add(msg.id);
-            message.success("Có đơn hàng mới!");
-            try {
-                const audio = new Audio("/sound/ting.mp3");
-                audio.play().catch(() => undefined);
-            } catch {
-                // ignore
-            }
+            if (!msg?.id) return;
+            // New order notification handled by Notification Service via /topic/notifications.{userId}
         },
     });
 
@@ -188,7 +178,7 @@ export const MerchantLayout: React.FC = () => {
                     <Button type="text" icon={<MenuIcon size={20} />} onClick={() => setCollapsed(!collapsed)} />
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                         <Badge count={unreadCount} size="small">
-                            <Button type="text" icon={<Bell size={20} />} />
+                            <Button type="text" icon={<Bell size={20} />} onClick={() => setNotifOpen(true)} />
                         </Badge>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <Avatar src={user?.avatar} size={32}>
@@ -208,6 +198,8 @@ export const MerchantLayout: React.FC = () => {
                 <Content style={{ padding: 24, minHeight: "calc(100vh - 64px)" }}>
                     <Outlet />
                 </Content>
+
+                <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} userIdOverride={storeId ?? undefined} />
             </Layout>
         </Layout>
     );

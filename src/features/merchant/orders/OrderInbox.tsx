@@ -14,7 +14,7 @@ import {
   Select,
   Skeleton,
 } from "antd";
-import { Check, X, Clock, Play, PackageCheck } from "lucide-react";
+import { Check, X, Clock, PackageCheck } from "lucide-react";
 import { useWebSocket } from "../../../hooks/useWebSocket";
 import {
   merchantService,
@@ -35,14 +35,13 @@ const { Title, Text } = Typography;
 const PENDING_STATUSES = ["pending"] as const;
 const ACTIVE_STATUSES = [
   "confirmed",
-  "preparing",
   "ready_for_pickup",
   "driver_assigned",
   "driver_at_store",
   "picked_up",
   "delivering",
 ] as const;
-const DONE_STATUSES = ["delivered", "completed", "cancelled", "failed"] as const;
+const DONE_STATUSES = ["delivered", "cancelled", "failed"] as const;
 
 const OrderInbox: React.FC = () => {
   const [stores, setStores] = useState<StoreResponse[]>([]);
@@ -53,19 +52,43 @@ const OrderInbox: React.FC = () => {
   const [rejectModal, setRejectModal] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  useWebSocket<Partial<MerchantOrder>>({
+  const playDing = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.frequency.value = 800;
+      o.type = 'sine';
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.3);
+    } catch { /* ignore */ }
+  };
+
+  useWebSocket<Record<string, unknown>>({
     topic: storeId ? `/topic/merchant.${storeId}.orders` : undefined,
     onMessage: (msg) => {
-      const incoming = msg as Partial<MerchantOrder> | null;
-      if (!incoming?.id) return;
+      if (!msg) return;
+      const orderId = (msg.orderId || msg.id) as string | undefined;
+      if (!orderId || !storeId) return;
 
+      playDing();
 
-      setOrders((prev) => {
-        const existing = prev.find((o) => o.id === incoming.id);
-        if (!existing) {
-          return [incoming as MerchantOrder, ...prev];
-        }
-        return prev.map((o) => (o.id === incoming.id ? { ...o, ...incoming } : o));
+      // Fetch full order detail to update inline
+      merchantOrderApi.getOrder(storeId, orderId).then((detail) => {
+        setOrders((prev) => {
+          const existing = prev.find((o) => o.id === orderId);
+          if (!existing) {
+            return [detail, ...prev];
+          }
+          return prev.map((o) => (o.id === orderId ? { ...o, ...detail } : o));
+        });
+      }).catch(() => {
+        // fallback: re-fetch all
+        loadOrders(storeId!);
       });
     },
   });
@@ -120,17 +143,6 @@ const OrderInbox: React.FC = () => {
       message.success("Đã xác nhận đơn hàng");
     } catch {
       message.error("Không thể xác nhận đơn hàng");
-    }
-  };
-
-  const handlePreparing = async (orderId: string) => {
-    if (!storeId) return;
-    try {
-      const updated = await merchantOrderApi.preparing(storeId, orderId);
-      updateLocalStatus(orderId, updated);
-      message.success("Bắt đầu chuẩn bị món");
-    } catch {
-      message.error("Thao tác thất bại");
     }
   };
 
@@ -259,19 +271,8 @@ const OrderInbox: React.FC = () => {
         )}
 
         {order.status === "confirmed" && (
-          <Button
-            type="primary"
-            style={{ backgroundColor: "#1890ff" }}
-            icon={<Play size={14} />}
-            onClick={() => handlePreparing(order.id)}
-          >
-            Bắt đầu chuẩn bị
-          </Button>
-        )}
-
-        {order.status === "preparing" && (
           <Space>
-            <PrepTimer startedAt={order.preparingAt} />
+            <PrepTimer startedAt={order.confirmedAt} />
             <Button
               type="primary"
               style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}

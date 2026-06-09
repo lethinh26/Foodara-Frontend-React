@@ -4,14 +4,12 @@ import type { Address } from './location';
 export type OrderStatus =
   | 'pending'
   | 'confirmed'
-  | 'preparing'
   | 'ready_for_pickup'
   | 'driver_assigned'
   | 'driver_at_store'
   | 'picked_up'
   | 'delivering'
   | 'delivered'
-  | 'completed'
   | 'cancelled'
   | 'failed';
 
@@ -74,7 +72,7 @@ export interface Order {
   actualDeliveryTime: number | null;
   note: string;
   cancelReason: string;
-  cancelledBy: 'customer' | 'merchant' | 'admin' | 'system' | null;
+  cancelledBy: 'customer' | 'store' | 'merchant' | 'driver' | 'admin' | 'system' | null;
   pickupCode: string;
   createdAt: string;
   updatedAt: string;
@@ -88,19 +86,6 @@ export interface OrderStatusHistory {
   note: string;
   timestamp: string;
   updatedBy: string;
-}
-
-export interface KitchenQueueItem {
-  orderId: string;
-  orderNumber: string;
-  items: { name: string; quantity: number; note: string }[];
-  status: 'waiting' | 'preparing' | 'ready';
-  estimatedPrepTime: number;
-  actualPrepTime: number | null;
-  priority: 'normal' | 'rush';
-  receivedAt: string;
-  startedAt: string | null;
-  completedAt: string | null;
 }
 
 export interface CartState {

@@ -21,10 +21,9 @@ const ReviewPage = React.lazy(() => import('../features/customer/review/ReviewPa
 
 const MerchantDashboard = React.lazy(() => import('../features/merchant/reports/MerchantDashboard'));
 const MerchantOrders = React.lazy(() => import('../features/merchant/orders/OrderInbox'));
-const KitchenQueue = React.lazy(() => import('../features/merchant/kitchen/KitchenQueuePage'));
+const MerchantHandover = React.lazy(() => import('../features/merchant/handover/HandoverPage'));
 const MenuManager = React.lazy(() => import('../features/merchant/menu/MenuManagerPage'));
 const MerchantInventory = React.lazy(() => import('../features/merchant/inventory/InventoryPage'));
-const MerchantHandover = React.lazy(() => import('../features/merchant/handover/HandoverPage'));
 const MerchantPromotions = React.lazy(() => import('../features/merchant/promotions/PromotionPage'));
 const MerchantReviews = React.lazy(() => import('../features/merchant/reviews/MerchantReviewsPage'));
 const MerchantProfile = React.lazy(() => import('../features/merchant/profile/MerchantProfilePage'));
@@ -95,7 +94,6 @@ export const AppRouter: React.FC = () => {
           <Route path="/merchant" element={<AuthGuard requiredRole="merchant"><MerchantLayout /></AuthGuard>}>
             <Route index element={<MerchantDashboard />} />
             <Route path="orders" element={<MerchantOrders />} />
-            <Route path="kitchen" element={<KitchenQueue />} />
             <Route path="handover" element={<MerchantHandover />} />
             <Route path="menu" element={<MenuManager />} />
             <Route path="inventory" element={<MerchantInventory />} />

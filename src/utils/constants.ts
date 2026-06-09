@@ -1,25 +1,27 @@
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Chờ xác nhận',
   confirmed: 'Đã xác nhận',
-  preparing: 'Đang chuẩn bị',
   ready_for_pickup: 'Sẵn sàng lấy hàng',
   driver_assigned: 'Tài xế đã nhận',
+  driver_at_store: 'Tài xế đến quán',
   picked_up: 'Đã lấy hàng',
   delivering: 'Đang giao',
   delivered: 'Đã giao',
   cancelled: 'Đã huỷ',
+  failed: 'Thất bại',
 };
 
 export const ORDER_STATUS_COLORS: Record<string, string> = {
   pending: '#FFC107',
   confirmed: '#2196F3',
-  preparing: '#FF9800',
   ready_for_pickup: '#9C27B0',
   driver_assigned: '#2196F3',
+  driver_at_store: '#2196F3',
   picked_up: '#00BCD4',
   delivering: '#4CAF50',
   delivered: '#4CAF50',
   cancelled: '#F44336',
+  failed: '#F44336',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {

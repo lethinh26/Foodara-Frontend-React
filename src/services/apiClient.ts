@@ -47,11 +47,11 @@ class ApiClient {
     this.baseUrl = env.apiBaseUrl;
   }
 
-  private buildHeaders(extraHeaders?: Record<string, string>): Record<string, string> {
-    return {
+  private buildHeaders(extra?: Record<string, string>): HeadersInit {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...extraHeaders,
     };
+    return { ...headers, ...extra };
   }
 
   private async handleResponse<T>(response: Response, originalRequest?: { url: string; init: RequestInit }): Promise<T> {
@@ -67,12 +67,18 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
+      const text = await response.text().catch(() => '');
+      const body = text ? (() => { try { return JSON.parse(text); } catch { return { message: text }; } })() : {};
       const rawMessage = body?.message || `HTTP ${response.status}`;
       throw new ApiError(response.status, body?.code || response.status, translateMessage(rawMessage));
     }
 
-    const body: BackendResponse<T> = await response.json();
+    const text = await response.text();
+    if (!text) {
+      // Empty 200 — e.g. after markAllRead
+      return {} as T;
+    }
+    const body: BackendResponse<T> = JSON.parse(text);
 
     if (body.code !== undefined && body.code !== 1000) {
       throw new ApiError(400, body.code, translateMessage(body.message || 'Đã xảy ra lỗi'));
@@ -132,7 +138,7 @@ class ApiClient {
     }
   }
 
-  async get<T>(path: string, params?: Record<string, string>): Promise<T> {
+  async get<T>(path: string, params?: Record<string, string>, extraHeaders?: Record<string, string>): Promise<T> {
     let url = `${this.baseUrl}${path}`;
     if (params) {
       const search = new URLSearchParams(params);
@@ -140,39 +146,39 @@ class ApiClient {
     }
     const init: RequestInit = {
       method: 'GET',
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(extraHeaders),
     };
     const response = await this.safeFetch(url, init);
     return this.handleResponse<T>(response, { url, init });
   }
 
-  async post<T>(path: string, body?: unknown): Promise<T> {
+  async post<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const init: RequestInit = {
       method: 'POST',
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(extraHeaders),
       body: body ? JSON.stringify(body) : undefined,
     };
     const response = await this.safeFetch(url, init);
     return this.handleResponse<T>(response, { url, init });
   }
 
-  async put<T>(path: string, body?: unknown): Promise<T> {
+  async put<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const init: RequestInit = {
       method: 'PUT',
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(extraHeaders),
       body: body ? JSON.stringify(body) : undefined,
     };
     const response = await this.safeFetch(url, init);
     return this.handleResponse<T>(response, { url, init });
   }
 
-  async delete<T>(path: string): Promise<T> {
+  async delete<T>(path: string, extraHeaders?: Record<string, string>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const init: RequestInit = {
       method: 'DELETE',
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(extraHeaders),
     };
     const response = await this.safeFetch(url, init);
     return this.handleResponse<T>(response, { url, init });

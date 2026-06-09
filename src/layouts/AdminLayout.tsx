@@ -6,6 +6,7 @@ import { useAppSelector, useAppDispatch } from '../hooks/useStore';
 import { selectUser, logout } from '../store/authSlice';
 import { selectUnreadCount } from '../store/notificationSlice';
 import { authService } from '../services/authService';
+import NotificationPanel from '../components/NotificationPanel';
 
 const { Header, Sider, Content } = Layout;
 
@@ -28,6 +29,7 @@ export const AdminLayout: React.FC = () => {
   const user = useAppSelector(selectUser);
   const unreadCount = useAppSelector(selectUnreadCount);
   const [collapsed, setCollapsed] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const selectedKey = menuItems
     .map(item => item.key)
@@ -99,7 +101,7 @@ export const AdminLayout: React.FC = () => {
           <Button type="text" icon={<MenuIcon size={20} />} onClick={() => setCollapsed(!collapsed)} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Badge count={unreadCount} size="small">
-              <Button type="text" icon={<Bell size={20} />} />
+              <Button type="text" icon={<Bell size={20} />} onClick={() => setNotifOpen(true)} />
             </Badge>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <Avatar src={user?.avatar} size={32} style={{ background: 'var(--primary)' }}>{user?.fullName?.[0] || 'A'}</Avatar>
@@ -120,6 +122,8 @@ export const AdminLayout: React.FC = () => {
         <Content style={{ padding: 24, minHeight: 'calc(100vh - 64px)', background: 'var(--background)' }}>
           <Outlet />
         </Content>
+
+        <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
       </Layout>
     </Layout>
   );

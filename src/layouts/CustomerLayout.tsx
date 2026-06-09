@@ -5,8 +5,9 @@ import { ShoppingCart, Bell, Heart, Search, ChevronDown, Menu as MenuIcon, Home,
 import { useAppSelector, useAppDispatch } from '../hooks/useStore';
 import { selectUser, logout } from '../store/authSlice';
 import { selectCartCount } from '../store/cartSlice';
-import { selectUnreadCount } from '../store/notificationSlice';
+import { selectUnreadCount, fetchUnreadCount } from '../store/notificationSlice';
 import { authService } from '../services/authService';
+import NotificationPanel from '../components/NotificationPanel';
 import '../styles/global.css';
 
 const { Header, Content, Footer } = Layout;
@@ -19,6 +20,7 @@ export const CustomerLayout: React.FC = () => {
   const cartCount = useAppSelector(selectCartCount);
   const unreadCount = useAppSelector(selectUnreadCount);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const handleLogout = async () => {
     try {
       await authService.logout();
@@ -77,7 +79,7 @@ export const CustomerLayout: React.FC = () => {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Badge count={unreadCount} size="small">
-            <Button type="text" icon={<Bell size={20} />} />
+            <Button type="text" icon={<Bell size={20} />} onClick={() => setNotifOpen(true)} />
           </Badge>
           <Badge count={cartCount} size="small">
             <Button type="text" icon={<ShoppingCart size={20} />} onClick={() => navigate('/customer/checkout')} />
@@ -121,6 +123,8 @@ export const CustomerLayout: React.FC = () => {
       <Drawer title="Menu" placement="left" open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} width={280}>
         <Menu mode="vertical" selectedKeys={[location.pathname]} items={navItems} onClick={({ key }) => { navigate(key); setMobileMenuOpen(false); }} />
       </Drawer>
+
+      <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
     </Layout>
   );
 };

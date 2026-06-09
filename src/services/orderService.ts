@@ -124,6 +124,7 @@ function mapBackendOrder(raw: any): Order {
 
   return {
     id: raw.id || '',
+    storeId: raw.storeId || '',
     orderNumber: raw.orderNumber || '',
     customerId: raw.customerId || '',
     customerName: '',

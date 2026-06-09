@@ -24,7 +24,7 @@ interface HandoverEntry {
  */
 const READY_STATUSES = ['ready_for_pickup', 'driver_assigned', 'driver_at_store'];
 /** Already handed over to driver, awaiting/in delivery. */
-const HANDED_OVER_STATUSES = ['picked_up', 'delivering', 'delivered', 'completed'];
+const HANDED_OVER_STATUSES = ['picked_up', 'delivering', 'delivered'];
 
 const HandoverPage: React.FC = () => {
   const [storeId, setStoreId] = useState<string | null>(null);

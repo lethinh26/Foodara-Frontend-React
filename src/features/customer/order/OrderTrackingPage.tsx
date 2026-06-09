@@ -12,12 +12,12 @@ import MapView, { type MapMarker } from '../../../components/map/MapView';
 
 const { Title, Text } = Typography;
 
-const statusSteps = ['pending', 'confirmed', 'preparing', 'picked_up', 'delivering', 'delivered'];
+const statusSteps = ['pending', 'confirmed', 'ready_for_pickup', 'picked_up', 'delivering', 'delivered'];
 
 const stepIcons: Record<string, React.ReactNode> = {
   pending: <Clock size={20} />,
   confirmed: <CheckCircle2 size={20} />,
-  preparing: <Package size={20} />,
+  ready_for_pickup: <Package size={20} />,
   picked_up: <Bike size={20} />,
   delivering: <Bike size={20} />,
   delivered: <CheckCircle2 size={20} />,
@@ -113,7 +113,7 @@ const OrderTrackingPage: React.FC = () => {
   // Poll order status every 5s when payment is pending
   useEffect(() => {
     if (!order) return;
-    const shouldPoll = order.paymentStatus === 'pending' || ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status?.toUpperCase?.() || '');
+    const shouldPoll = order.paymentStatus === 'pending' || ['pending', 'confirmed', 'ready_for_pickup', 'picked_up', 'delivering'].includes(order.status || '');
     if (!shouldPoll) { if (pollingRef.current) clearInterval(pollingRef.current); return; }
     pollingRef.current = setInterval(() => { void loadOrder(); void loadTracking(); }, 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
