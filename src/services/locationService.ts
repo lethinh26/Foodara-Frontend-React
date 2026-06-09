@@ -42,6 +42,10 @@ export interface GeocodeResponse {
   latitude: number;
   longitude: number;
   formattedAddress: string;
+  addressLine?: string;
+  ward?: string;
+  districtName?: string;
+  cityName?: string;
 }
 
 // ── Cache to avoid re-fetching ──
@@ -126,3 +130,63 @@ export const locationService = {
     });
   },
 };
+
+// ============================================================
+// Mapbox-backed extensions
+// ============================================================
+export interface SuggestResponse {
+  id: string;
+  name: string;
+  fullAddress: string;
+}
+
+export interface DirectionsResponse {
+  distanceKm: number;
+  durationMinutes: number;
+  polyline: string;
+}
+
+export interface DeliveryQuote {
+  storeId: string;
+  addressId: string | null;
+  distanceKm: number;
+  etaMinutes: number | null;
+  deliveryFee: number;
+  surgeMultiplier: number;
+}
+
+export const mapboxLocationService = {
+  async suggest(
+    q: string,
+    sessionToken: string,
+    proximity?: { lat: number; lng: number }
+  ): Promise<SuggestResponse[]> {
+    if (env.isMockMode || !env.apiBaseUrl) return [];
+    const params: Record<string, string> = { q, sessionToken };
+    if (proximity) {
+      params.proximityLat = String(proximity.lat);
+      params.proximityLng = String(proximity.lng);
+    }
+    return apiClient.get<SuggestResponse[]>('/v1/locations/suggest', params);
+  },
+
+  async retrieve(id: string, sessionToken: string): Promise<GeocodeResponse> {
+    if (env.isMockMode || !env.apiBaseUrl) {
+      return { latitude: env.defaultLat, longitude: env.defaultLng, formattedAddress: id };
+    }
+    return apiClient.get<GeocodeResponse>('/v1/locations/retrieve', { id, sessionToken });
+  },
+
+  async getDirections(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number }
+  ): Promise<DirectionsResponse> {
+    return apiClient.get<DirectionsResponse>('/v1/locations/directions', {
+      fromLat: String(from.lat),
+      fromLng: String(from.lng),
+      toLat: String(to.lat),
+      toLng: String(to.lng),
+    });
+  },
+};
+

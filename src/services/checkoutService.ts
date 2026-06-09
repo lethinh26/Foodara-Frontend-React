@@ -9,6 +9,9 @@ interface BackendCheckoutPreviewResponse {
   subtotal?: number;
   subtotalAfterVoucher?: number;
   deliveryFee?: number;
+  distanceKm?: number;
+  etaMinutes?: number | null;
+  surgeMultiplier?: number;
   platformFee?: number;
   platformDiscount?: number;
   storeDiscount?: number;
@@ -39,6 +42,9 @@ export interface CheckoutPreviewResult {
   subtotal: number;
   subtotalAfterVoucher: number;
   deliveryFee: number;
+  distanceKm: number;
+  etaMinutes: number | null;
+  surgeMultiplier: number;
   platformFee: number;
   platformDiscount: number;
   storeDiscount: number;
@@ -69,6 +75,9 @@ const mapPreviewResponse = (response: BackendCheckoutPreviewResponse): CheckoutP
   subtotal: toNumber(response.subtotal),
   subtotalAfterVoucher: toNumber(response.subtotalAfterVoucher),
   deliveryFee: toNumber(response.deliveryFee),
+  distanceKm: toNumber(response.distanceKm),
+  etaMinutes: response.etaMinutes ?? null,
+  surgeMultiplier: toNumber(response.surgeMultiplier, 1),
   platformFee: toNumber(response.platformFee),
   platformDiscount: toNumber(response.platformDiscount),
   storeDiscount: toNumber(response.storeDiscount),
@@ -85,6 +94,15 @@ const clampPlatformFee = (subtotalAfterVoucher: number): number => {
 };
 
 export const checkoutService = {
+  async getDeliveryFeeByCoords(storeId: string, lat: number, lng: number) {
+    return apiClient.get<BackendCheckoutPreviewResponse>('/v1/checkout/delivery-fee/by-coords', {
+      storeId, lat: String(lat), lng: String(lng),
+    });
+  },
+  async getDeliveryFeeBatch(payload: { lat: number; lng: number; storeIds: string[] }) {
+    return apiClient.post<Array<{ storeId: string; distanceKm?: number; etaMinutes?: number; deliveryFee?: number; surgeMultiplier?: number }>>('/v1/checkout/delivery-fee/batch', payload);
+  },
+
   async preview(payload: CheckoutPreviewPayload): Promise<CheckoutPreviewResult> {
     if (env.isMockMode) {
       await delay(180);
@@ -121,3 +139,4 @@ export const checkoutService = {
     return mapPreviewResponse(response);
   },
 };
+

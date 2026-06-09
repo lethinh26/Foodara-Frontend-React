@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Tag, Carousel, Skeleton, Row, Col, Typography, Space, Button } from 'antd';
+import { Card, Tag, Carousel, Skeleton, Row, Col, Typography, Space, Button, Tooltip } from 'antd';
 import { MapPin, Clock, Star, ChevronRight, Flame, Truck, Sparkles, TrendingUp } from 'lucide-react';
 import { homeService, type Banner } from '../../../services/homeService';
+import { mapboxLocationService } from '../../../services/locationService';
+import { checkoutService } from '../../../services/checkoutService';
+import { authService } from '../../../services/authService';
 import { formatVND, formatDistance, formatETA } from '../../../utils/format';
 import type { Restaurant, RestaurantCategory } from '../../../types/restaurant';
 
@@ -16,6 +19,9 @@ const HomePage: React.FC = () => {
   const [nearby, setNearby] = useState<Restaurant[]>([]);
   const [allRestaurants, setAllRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userOrigin, setUserOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [originResolved, setOriginResolved] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -40,6 +46,70 @@ const HomePage: React.FC = () => {
     };
     load();
   }, []);
+
+  // Resolve origin: default address -> geolocation -> none
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const addrs = await authService.getAddresses();
+        const def = addrs.find((a) => a.isDefault) ?? addrs[0];
+        if (def?.latitude && def?.longitude) {
+          if (!cancelled) {
+            setUserOrigin({ lat: Number(def.latitude), lng: Number(def.longitude) });
+            setOriginResolved(true);
+          }
+          return;
+        }
+      } catch { /* not logged in / no addresses */ }
+      if (!navigator.geolocation) {
+        if (!cancelled) setOriginResolved(true);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!cancelled) {
+            setUserOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            setOriginResolved(true);
+          }
+        },
+        () => { if (!cancelled) setOriginResolved(true); },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 }
+      );
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Batch quote: 1 call POST /v1/checkout/delivery-fee/batch -> distance/ETA/fee theo DeliveryFeeConfig
+  useEffect(() => {
+    if (!userOrigin) return;
+    if (!featured.length && !nearby.length) return;
+    let cancelled = false;
+    setQuotesLoading(true);
+    const stop = setTimeout(() => setQuotesLoading(false), 3000);
+    (async () => {
+      const ids = Array.from(new Set([...featured, ...nearby].map((r) => r.id)));
+      try {
+        const items = await checkoutService.getDeliveryFeeBatch({ lat: userOrigin.lat, lng: userOrigin.lng, storeIds: ids });
+        const map = new Map(items.map((it) => [it.storeId, it]));
+        const enrich = (list: Restaurant[]) => list.map((r) => {
+          const it = map.get(r.id);
+          if (!it || it.distanceKm == null) return r;
+          return { ...r, distance: it.distanceKm, estimatedDeliveryTime: it.etaMinutes ?? r.estimatedDeliveryTime, deliveryFee: it.deliveryFee ?? r.deliveryFee };
+        }).slice().sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+        if (cancelled) return;
+        setFeatured(enrich(featured));
+        setNearby(enrich(nearby));
+        setAllRestaurants(enrich(featured));
+      } catch { /* ignore */ }
+      setQuotesLoading(false);
+      clearTimeout(stop);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userOrigin, featured.length, nearby.length]);
+
+
 
   const RestaurantCard: React.FC<{ restaurant: Restaurant }> = ({ restaurant }) => (
     <Card
@@ -77,9 +147,15 @@ const HomePage: React.FC = () => {
           </span>
         </Space>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-secondary)', fontSize: 12 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={12} />{formatDistance(restaurant.distance)}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={12} />{formatETA(restaurant.estimatedDeliveryTime)}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Truck size={12} />{formatVND(restaurant.deliveryFee)}</span>
+          {quotesLoading ? (
+            <Skeleton.Input active size="small" style={{ width: 200, height: 14 }} />
+          ) : userOrigin && (restaurant.distance > 0 || restaurant.estimatedDeliveryTime > 0) ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-secondary)', fontSize: 12 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={12} />{formatDistance(restaurant.distance)}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={12} />{formatETA(restaurant.estimatedDeliveryTime)}</span>
+              <Tooltip title="Phí ship cơ bản theo khoảng cách. Có thể được giảm bằng voucher khi đặt hàng."><span style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'help' }}><Truck size={12} />{formatVND(restaurant.deliveryFee)}</span></Tooltip>
+            </span>
+          ) : null}
         </div>
       </div>
     </Card>
@@ -196,3 +272,12 @@ const HomePage: React.FC = () => {
 };
 
 export default HomePage;
+
+
+
+
+
+
+
+
+

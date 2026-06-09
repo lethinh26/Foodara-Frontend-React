@@ -24,6 +24,8 @@ import type { UploadFile } from "antd/es/upload/interface";
 import Dragger from "antd/es/upload/Dragger";
 import { uploadToCloudinary } from "../../../services/uploadService";
 import { merchantService } from "../../../services/merchantService";
+import AddressAutocomplete, { type SelectedAddress } from "../../../components/map/AddressAutocomplete";
+import MapPicker from "../../../components/map/MapPicker";
 import type { MerchantRegisterRequest } from "../../../types/merchant";
 
 const { Text } = Typography;
@@ -38,6 +40,7 @@ const StoreInfoStep: React.FC<StoreInfoStepProps> = ({ onSuccess, next }) => {
   const [loading, setLoading] = useState(false);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
   const [coverFileList, setCoverFileList] = useState<UploadFile[]>([]);
+  const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     merchantService.getProfile().then(() => {
@@ -87,6 +90,12 @@ const StoreInfoStep: React.FC<StoreInfoStepProps> = ({ onSuccess, next }) => {
         taxCode: values.taxCode,
         logoUrl: finalLogoUrl,
         coverImageUrl: finalCoverImageUrl,
+        addressLine: values.addressLine,
+        ward: values.ward,
+        districtName: values.districtName,
+        cityName: values.cityName,
+        latitude: pickedCoords?.lat,
+        longitude: pickedCoords?.lng,
       };
 
       // 4. Gọi API đăng ký
@@ -222,6 +231,25 @@ const StoreInfoStep: React.FC<StoreInfoStepProps> = ({ onSuccess, next }) => {
         </Col>
       </Row>
 
+      <Form.Item label="Tìm địa chỉ cửa hàng (Mapbox)">
+        <AddressAutocomplete
+          onSelect={(s: SelectedAddress) => {
+            form.setFieldsValue({ addressLine: s.fullAddress });
+            setPickedCoords({ lat: s.lat, lng: s.lng });
+          }}
+        />
+      </Form.Item>
+      <Form.Item name="addressLine" label="Địa chỉ chi tiết">
+        <Input placeholder="Số nhà, tên đường" />
+      </Form.Item>
+      <Row gutter={12}>
+        <Col span={8}><Form.Item name="ward" label="Phường/Xã"><Input /></Form.Item></Col>
+        <Col span={8}><Form.Item name="districtName" label="Quận/Huyện"><Input /></Form.Item></Col>
+        <Col span={8}><Form.Item name="cityName" label="Tỉnh/Thành"><Input /></Form.Item></Col>
+      </Row>
+      <Form.Item label="Vị trí trên bản đồ">
+        <MapPicker value={pickedCoords ?? undefined} onChange={setPickedCoords} height={260} />
+      </Form.Item>
       <Form.Item name="taxCode" label="Mã số thuế (nếu có)">
         <Input
           prefix={<FileTextOutlined />}
@@ -274,3 +302,4 @@ const StoreInfoStep: React.FC<StoreInfoStepProps> = ({ onSuccess, next }) => {
 };
 
 export default StoreInfoStep;
+

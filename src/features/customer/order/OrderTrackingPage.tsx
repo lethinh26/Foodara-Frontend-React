@@ -3,10 +3,12 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, Typography, Steps, Tag, Button, Spin, Divider, Avatar, message } from 'antd';
 import { Phone, MapPin, Store, Bike, Clock, CheckCircle2, ArrowLeft, QrCode, Copy, CreditCard, Banknote, Package, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { orderService } from '../../../services/orderService';
+import type { OrderTrackingResponse } from '../../../services/orderService';
 import { useWebSocket } from '../../../hooks/useWebSocket';
 import { formatVND, formatRelativeTime } from '../../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../../utils/constants';
 import type { Order } from '../../../types/order';
+import MapView, { type MapMarker } from '../../../components/map/MapView';
 
 const { Title, Text } = Typography;
 
@@ -21,7 +23,40 @@ const stepIcons: Record<string, React.ReactNode> = {
   delivered: <CheckCircle2 size={20} />,
 };
 
-const PAYMENT_TIMEOUT_MS = 10 * 60 * 1000; 
+const PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+
+function buildMarkers(tracking: OrderTrackingResponse | null): MapMarker[] {
+  if (!tracking) return [];
+  const markers: MapMarker[] = [];
+  if (tracking.storeLatitude && tracking.storeLongitude) {
+    markers.push({
+      id: `store-${tracking.storeId}`,
+      lat: tracking.storeLatitude,
+      lng: tracking.storeLongitude,
+      type: 'store',
+      label: tracking.storeName || 'Quán',
+    });
+  }
+  if (tracking.deliveryLatitude && tracking.deliveryLongitude) {
+    markers.push({
+      id: `delivery-${tracking.orderId}`,
+      lat: tracking.deliveryLatitude,
+      lng: tracking.deliveryLongitude,
+      type: 'delivery',
+      label: 'Điểm giao',
+    });
+  }
+  if (tracking.driverLatitude && tracking.driverLongitude) {
+    markers.push({
+      id: `driver-${tracking.driverId || 'unknown'}`,
+      lat: tracking.driverLatitude,
+      lng: tracking.driverLongitude,
+      type: 'driver',
+      label: tracking.driverName || 'Tài xế',
+    });
+  }
+  return markers;
+}
 
 const OrderTrackingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +65,7 @@ const OrderTrackingPage: React.FC = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrCopied, setQrCopied] = useState(false);
+  const [tracking, setTracking] = useState<OrderTrackingResponse | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -41,6 +77,10 @@ const OrderTrackingPage: React.FC = () => {
         setOrder(prev => prev ? { ...prev, ...msg } : prev);
         message.info('Trạng thái đơn hàng vừa được cập nhật!');
       }
+      // If driver location included, refresh tracking
+      if (msg && (msg.driverLatitude || msg.driverLongitude)) {
+        setTracking(prev => prev ? { ...prev, driverLatitude: msg.driverLatitude ?? prev.driverLatitude, driverLongitude: msg.driverLongitude ?? prev.driverLongitude } : prev);
+      }
     }
   });
 
@@ -50,10 +90,15 @@ const OrderTrackingPage: React.FC = () => {
     return o;
   }, [id]);
 
+  const loadTracking = useCallback(async () => {
+    const t = await orderService.getOrderTracking(id || '');
+    if (t) setTracking(t);
+  }, [id]);
+
   // Initial load
   useEffect(() => {
-    loadOrder().finally(() => setLoading(false));
-  }, [loadOrder]);
+    Promise.all([loadOrder(), loadTracking()]).finally(() => setLoading(false));
+  }, [loadOrder, loadTracking]);
 
   // Payment callback from SePay redirect
   useEffect(() => {
@@ -70,9 +115,9 @@ const OrderTrackingPage: React.FC = () => {
     if (!order) return;
     const shouldPoll = order.paymentStatus === 'pending' || ['PENDING', 'CONFIRMED', 'PREPARING'].includes(order.status?.toUpperCase?.() || '');
     if (!shouldPoll) { if (pollingRef.current) clearInterval(pollingRef.current); return; }
-    pollingRef.current = setInterval(() => { void loadOrder(); }, 5000);
+    pollingRef.current = setInterval(() => { void loadOrder(); void loadTracking(); }, 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [order?.paymentStatus, order?.status, loadOrder]);
+  }, [order?.paymentStatus, order?.status, loadOrder, loadTracking]);
 
   // 10-minute countdown for QR payment
   useEffect(() => {
@@ -129,7 +174,7 @@ const OrderTrackingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Cancellation banner — shown when the merchant or customer cancels the order */}
+      {/* Cancellation banner */}
       {isCancelled && (
         <div
           style={{
@@ -204,22 +249,13 @@ const OrderTrackingPage: React.FC = () => {
           </div>
         )}
 
-        {/* Map placeholder */}
-        <div style={{
-          background: 'linear-gradient(135deg, #f0f7f0 0%, #e8f5e9 100%)',
-          borderRadius: 14, height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginTop: 16, border: '1px dashed var(--border-soft)', position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(76,175,80,0.08) 1px, transparent 0)',
-            backgroundSize: '24px 24px',
-          }} />
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', position: 'relative', zIndex: 1 }}>
-            <MapPin size={28} style={{ marginBottom: 6 }} color="var(--primary)" />
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Bản đồ theo dõi</div>
-            <Text type="secondary" style={{ fontSize: 11 }}>Cấu hình VITE_MAPBOX_TOKEN để hiển thị bản đồ thực</Text>
-          </div>
+        {/* Tracking Map */}
+        <div style={{ marginTop: 16, borderRadius: 14, overflow: 'hidden' }}>
+          <MapView
+            markers={buildMarkers(tracking)}
+            polyline={tracking?.polyline ?? undefined}
+            height={220}
+          />
         </div>
 
         {/* ETA */}
@@ -240,8 +276,13 @@ const OrderTrackingPage: React.FC = () => {
             <div>
               <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>Thời gian dự kiến</Text>
               <Text style={{ fontSize: 22, fontWeight: 700, color: 'var(--primary)', lineHeight: 1 }}>
-                {order.estimatedDeliveryTime} phút
+                {tracking?.etaMinutes ?? order.estimatedDeliveryTime} phút
               </Text>
+              {tracking?.distanceKm != null && (
+                <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                  ~{tracking.distanceKm.toFixed(1)} km
+                </Text>
+              )}
             </div>
           </div>
         )}
