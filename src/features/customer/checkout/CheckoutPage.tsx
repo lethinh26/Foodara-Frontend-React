@@ -341,6 +341,8 @@ const CheckoutPage: React.FC = () => {
     const deliveryFee = preview?.deliveryFee ?? 0;
     const platformFee = preview?.platformFee ?? 0;
     const total = preview?.totalAmount ?? Math.max(discountedSubtotal + deliveryFee + platformFee, 0);
+    const distanceKm = preview?.distanceKm ?? null;
+    const etaMinutes = preview?.etaMinutes ?? null;
     const selectedVoucherIds = [selectedStoreVoucherId, selectedSystemDiscountVoucherId, selectedSystemShipVoucherId].filter(Boolean) as string[];
     void cartTotalAfterVoucher;
 
@@ -648,6 +650,12 @@ const CheckoutPage: React.FC = () => {
                         </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Sau voucher</Text><Text>{formatVND(discountedSubtotal)}</Text></div>
+                    {(distanceKm !== null || etaMinutes !== null) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
+                            <Text type="secondary">Khoảng cách · ETA</Text>
+                            <Text>{distanceKm !== null ? `${distanceKm.toFixed(1)} km` : '—'}{etaMinutes !== null ? ` · ~${etaMinutes} phút` : ''}</Text>
+                        </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Phí giao hàng</Text><Text>{formatVND(deliveryFee)}</Text></div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Phí nền tảng</Text><Text>{formatVND(platformFee)}</Text></div>
                 </div>
@@ -830,3 +838,5 @@ const CheckoutPage: React.FC = () => {
 };
 
 export default CheckoutPage;
+
+

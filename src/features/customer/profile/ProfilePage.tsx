@@ -6,7 +6,8 @@ import { selectUser, updateProfile } from '../../../store/authSlice';
 import { authService } from '../../../services/authService';
 import type { AddressResponse, AddressRequest, SessionResponse } from '../../../services/authService';
 import { locationService } from '../../../services/locationService';
-import type { ProvinceItem, DistrictItem, WardItem } from '../../../services/locationService';
+import AddressAutocomplete, { type SelectedAddress } from '../../../components/map/AddressAutocomplete';
+import MapPicker from '../../../components/map/MapPicker';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -28,21 +29,15 @@ const ProfilePage: React.FC = () => {
   const [addressModal, setAddressModal] = useState(false);
   const [editAddress, setEditAddress] = useState<AddressResponse | null>(null);
   const [savingAddress, setSavingAddress] = useState(false);
+  const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [addressForm] = Form.useForm();
 
-  const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
-  const [districts, setDistricts] = useState<DistrictItem[]>([]);
-  const [wards, setWards] = useState<WardItem[]>([]);
-  const [loadingProvinces, setLoadingProvinces] = useState(false);
-  const [loadingDistricts, setLoadingDistricts] = useState(false);
-  const [loadingWards, setLoadingWards] = useState(false);
 
   const [sessions, setSessions] = useState<SessionResponse[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
   useEffect(() => {
     loadAddresses();
-    loadProvinces();
     loadSessions();
   }, []);
 
@@ -58,44 +53,8 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const loadProvinces = async () => {
-    setLoadingProvinces(true);
-    try {
-      const result = await locationService.getProvinces();
-      setProvinces(result);
-    } catch {
-      // 
-    } finally {
-      setLoadingProvinces(false);
-    }
-  };
 
-  const loadDistricts = async (provinceCode: number) => {
-    setLoadingDistricts(true);
-    setDistricts([]);
-    setWards([]);
-    try {
-      const result = await locationService.getDistricts(provinceCode);
-      setDistricts(result);
-    } catch {
-      setDistricts([]);
-    } finally {
-      setLoadingDistricts(false);
-    }
-  };
 
-  const loadWards = async (districtCode: number) => {
-    setLoadingWards(true);
-    setWards([]);
-    try {
-      const result = await locationService.getWards(districtCode);
-      setWards(result);
-    } catch {
-      setWards([]);
-    } finally {
-      setLoadingWards(false);
-    }
-  };
 
   const loadSessions = async () => {
     setLoadingSessions(true);
@@ -125,8 +84,6 @@ const ProfilePage: React.FC = () => {
 
   const openAddressModal = (addr?: AddressResponse) => {
     setEditAddress(addr || null);
-    setDistricts([]);
-    setWards([]);
 
     if (addr) {
       addressForm.setFieldsValue({
@@ -137,10 +94,18 @@ const ProfilePage: React.FC = () => {
         ward: addr.ward,
         deliveryNote: addr.deliveryNote,
         isDefault: addr.isDefault,
+        districtName: addr.districtName,
+        cityName: addr.cityName,
+        latitude: addr.latitude ?? undefined,
+        longitude: addr.longitude ?? undefined,
       });
+      const lat = typeof addr.latitude === 'number' ? addr.latitude : Number(addr.latitude);
+      const lng = typeof addr.longitude === 'number' ? addr.longitude : Number(addr.longitude);
+      setPickedCoords(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
     } else {
       addressForm.resetFields();
       addressForm.setFieldsValue({ label: 'home', isDefault: false });
+      setPickedCoords(null);
     }
     setAddressModal(true);
   };
@@ -148,20 +113,19 @@ const ProfilePage: React.FC = () => {
   const handleSaveAddress = async (values: any) => {
     setSavingAddress(true);
     try {
-      const selectedProvince = provinces.find(p => p.code === values.provinceCode);
-      const selectedDistrict = districts.find(d => d.code === values.districtCode);
-      const selectedWard = wards.find(w => w.code === values.wardCode);
 
       const request: AddressRequest = {
         label: values.label,
         recipientName: values.recipientName,
         recipientPhone: values.recipientPhone,
         addressLine: values.addressLine,
-        ward: selectedWard?.name || values.ward || '',
-        cityName: selectedProvince?.name || '',
-        districtName: selectedDistrict?.name || '',
+        ward: values.ward || '',
+        cityName: values.cityName || '',
+        districtName: values.districtName || '',
         deliveryNote: values.deliveryNote,
         isDefault: values.isDefault || false,
+        latitude: values.latitude ?? pickedCoords?.lat ?? null,
+        longitude: values.longitude ?? pickedCoords?.lng ?? null,
       };
 
       if (editAddress) {
@@ -439,63 +403,46 @@ const ProfilePage: React.FC = () => {
             </Form.Item>
           </div>
 
-          <Form.Item name="addressLine" label="Địa chỉ chi tiết" rules={[{ required: true, message: 'Vui lòng nhập địa chỉ' }]}>
-            <Input prefix={<MapPin size={14} />} placeholder="Số nhà, tên đường" />
-          </Form.Item>
-
-          <Form.Item name="provinceCode" label="Tỉnh / Thành phố">
-            <Select
-              showSearch
-              placeholder="Chọn tỉnh/thành phố"
-              loading={loadingProvinces}
-              options={provinces.map(p => ({ value: p.code, label: p.name }))}
-              filterOption={(input, option) =>
-                (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              onChange={(val) => {
-                addressForm.setFieldsValue({ districtCode: undefined, wardCode: undefined });
-                setDistricts([]);
-                setWards([]);
-                if (val) loadDistricts(val);
+          <Form.Item name="addressLine" label="Địa chỉ" rules={[{ required: true, message: 'Vui lòng chọn địa chỉ' }]}>
+            <AddressAutocomplete
+              value={addressForm.getFieldValue('addressLine')}
+              onSelect={(s: SelectedAddress) => {
+                addressForm.setFieldsValue({
+                  addressLine: s.fullAddress,
+                  ward: s.ward,
+                  districtName: s.districtName,
+                  cityName: s.cityName,
+                  latitude: s.lat,
+                  longitude: s.lng,
+                });
+                setPickedCoords({ lat: s.lat, lng: s.lng });
               }}
-              allowClear
             />
           </Form.Item>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Form.Item name="districtCode" label="Quận / Huyện">
-              <Select
-                showSearch
-                placeholder="Chọn quận/huyện"
-                loading={loadingDistricts}
-                options={districts.map(d => ({ value: d.code, label: d.name }))}
-                filterOption={(input, option) =>
-                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                }
-                onChange={(val) => {
-                  addressForm.setFieldValue('wardCode', undefined);
-                  setWards([]);
-                  if (val) loadWards(val);
-                }}
-                allowClear
-                disabled={districts.length === 0}
-              />
-            </Form.Item>
-            <Form.Item name="wardCode" label="Phường / Xã">
-              <Select
-                showSearch
-                placeholder="Chọn phường/xã"
-                loading={loadingWards}
-                options={wards.map(w => ({ value: w.code, label: w.name }))}
-                filterOption={(input, option) =>
-                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                }
-                allowClear
-                disabled={wards.length === 0}
-              />
-            </Form.Item>
-          </div>
-
+          <Form.Item label="Vị trí trên bản đồ" tooltip="Kéo ghim hoặc click để chỉnh toạ độ">
+            <MapPicker
+              value={pickedCoords ?? undefined}
+              onChange={async (c) => {
+                setPickedCoords(c);
+                addressForm.setFieldsValue({ latitude: c.lat, longitude: c.lng });
+                try {
+                  const r = await locationService.reverseGeocode(c.lat, c.lng);
+                  addressForm.setFieldsValue({
+                    addressLine: r.formattedAddress || addressForm.getFieldValue('addressLine'),
+                    ward: r.ward ?? addressForm.getFieldValue('ward'),
+                    districtName: r.districtName ?? addressForm.getFieldValue('districtName'),
+                    cityName: r.cityName ?? addressForm.getFieldValue('cityName'),
+                  });
+                } catch { /* ignore */ }
+              }}
+              height={260}
+            />
+          </Form.Item>
+          <Form.Item name="latitude" hidden><Input /></Form.Item>
+          <Form.Item name="longitude" hidden><Input /></Form.Item>
+          <Form.Item name="ward" hidden><Input /></Form.Item>
+          <Form.Item name="districtName" hidden><Input /></Form.Item>
+          <Form.Item name="cityName" hidden><Input /></Form.Item>
           <Form.Item name="deliveryNote" label="Ghi chú giao hàng">
             <TextArea rows={2} placeholder="Tầng 3, phòng 302, gọi trước khi giao..." />
           </Form.Item>
@@ -520,3 +467,6 @@ const ProfilePage: React.FC = () => {
 };
 
 export default ProfilePage;
+
+
+

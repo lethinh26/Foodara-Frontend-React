@@ -1,17 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Tag, Typography, Space, Button, Tabs, Rate, Badge, Spin, Empty, Modal, Input, message, Tooltip } from 'antd';
+import { Card, Tag, Typography, Space, Button, Tabs, Rate, Badge, Spin, Empty, Modal, Input, message, Tooltip, Skeleton } from 'antd';
 import { Star, MapPin, Clock, Truck, Heart, ShoppingCart, Plus, Minus, ArrowLeft, Ticket, AlertTriangle } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../../hooks/useStore';
 import { addCartItem, fetchCart, selectCartItems, selectCartRestaurant } from '../../../store/cartSlice';
 import { addFavorite, removeFavorite, selectIsFavorite } from '../../../store/favoriteSlice';
 import { restaurantService } from '../../../services/restaurantService';
 import { voucherService } from '../../../services/voucherService';
+import { authService } from '../../../services/authService';
+import { checkoutService } from '../../../services/checkoutService';
 import { formatVND, formatDistance, formatETA, formatRelativeTime } from '../../../utils/format';
 import type { Restaurant } from '../../../types/restaurant';
 import type { MenuItem, MenuCategory, ComboOption } from '../../../types/menu';
 import type { Review } from '../../../types/review';
 import type { Voucher } from '../../../types/promotion';
+import MapView, { type MapMarker } from '../../../components/map/MapView';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -30,6 +33,10 @@ const RestaurantDetailPage: React.FC = () => {
   const [addingComboId, setAddingComboId] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [storeVouchers, setStoreVouchers] = useState<Voucher[]>([]);
+  const [userOrigin, setUserOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [originResolved, setOriginResolved] = useState(false);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [liveQuote, setLiveQuote] = useState<{ distanceKm: number; etaMinutes: number | null; deliveryFee: number } | null>(null);
   const [voucherModalOpen, setVoucherModalOpen] = useState(false);
   const [voucherDetail, setVoucherDetail] = useState<Voucher | null>(null);
   const [collectingVoucherId, setCollectingVoucherId] = useState<string | null>(null);
@@ -88,6 +95,26 @@ const RestaurantDetailPage: React.FC = () => {
     }
   }, []);
 
+  // Live quote distance/ETA/fee qua batch (1 store)
+  useEffect(() => {
+    if (!userOrigin || !restaurant?.id) return;
+    let cancelled = false;
+    setQuotesLoading(true);
+    const stop = setTimeout(() => setQuotesLoading(false), 3000);
+    (async () => {
+      try {
+        const items = await checkoutService.getDeliveryFeeBatch({ lat: userOrigin.lat, lng: userOrigin.lng, storeIds: [restaurant.id] });
+        const it = items[0];
+        if (!cancelled && it?.distanceKm != null) {
+          setLiveQuote({ distanceKm: it.distanceKm, etaMinutes: it.etaMinutes ?? null, deliveryFee: it.deliveryFee ?? 0 });
+        }
+      } catch { /* ignore */ }
+      setQuotesLoading(false);
+      clearTimeout(stop);
+    })();
+    return () => { cancelled = true; };
+  }, [userOrigin, restaurant?.id]);
+
   useEffect(() => {
     const load = async () => {
       if (!id) return;
@@ -113,6 +140,29 @@ const RestaurantDetailPage: React.FC = () => {
     };
     void load();
   }, [id]);
+
+  // Resolve origin
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const addrs = await authService.getAddresses();
+        const def = addrs.find((a) => a.isDefault) ?? addrs[0];
+        if (def?.latitude && def?.longitude) {
+          if (!cancelled) { setUserOrigin({ lat: Number(def.latitude), lng: Number(def.longitude) }); setOriginResolved(true); }
+          return;
+        }
+      } catch { /* ignore */ }
+      if (!navigator.geolocation) { if (!cancelled) setOriginResolved(true); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { if (!cancelled) { setUserOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setOriginResolved(true); } },
+        () => { if (!cancelled) setOriginResolved(true); },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 600_000 }
+      );
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 
   const openItemModal = (item: MenuItem) => {
     setSelectedItem(item);
@@ -328,15 +378,18 @@ const RestaurantDetailPage: React.FC = () => {
               <Tag style={{ margin: 0, borderRadius: 6, fontWeight: 600, background: 'rgba(76,175,80,0.85)', color: '#fff', border: 'none' }}>
                 <Star size={11} style={{ marginRight: 2 }} /> {restaurant.rating} ({restaurant.reviewCount})
               </Tag>
+              {quotesLoading ? (<Skeleton.Input active size="small" style={{ width: 220, height: 22 }} />) :
+               (userOrigin && (liveQuote || restaurant.distance > 0)) ? (<>
               <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
-                <MapPin size={11} style={{ marginRight: 2 }} /> {formatDistance(restaurant.distance)}
+                <MapPin size={11} style={{ marginRight: 2 }} /> {formatDistance(liveQuote?.distanceKm ?? restaurant.distance)}
               </Tag>
               <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
-                <Clock size={11} style={{ marginRight: 2 }} /> {formatETA(restaurant.estimatedDeliveryTime)}
+                <Clock size={11} style={{ marginRight: 2 }} /> {formatETA(liveQuote?.etaMinutes ?? restaurant.estimatedDeliveryTime)}
               </Tag>
               <Tag style={{ margin: 0, borderRadius: 6, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', backdropFilter: 'blur(4px)' }}>
-                <Truck size={11} style={{ marginRight: 2 }} /> {formatVND(restaurant.deliveryFee)}
+                <Tooltip title="Phí ship cơ bản theo khoảng cách. Có thể được giảm bằng voucher khi đặt hàng."><span style={{ cursor: 'help' }}><Truck size={11} style={{ marginRight: 2 }} /> {formatVND(liveQuote?.deliveryFee ?? restaurant.deliveryFee)}</span></Tooltip>
               </Tag>
+              </>) : null}
             </div>
           </div>
         </div>
@@ -661,6 +714,22 @@ const RestaurantDetailPage: React.FC = () => {
                 <div><Text strong>Giờ mở cửa:</Text> <Text>{restaurant.openingHours.map(h => `${h.open} - ${h.close}`).join(', ')}</Text></div>
                 <div><Text strong>Đơn tối thiểu:</Text> <Text>{formatVND(restaurant.minOrder)}</Text></div>
                 <Paragraph>{restaurant.description}</Paragraph>
+
+                {/* Store location map */}
+                {restaurant.coordinates?.lat && restaurant.coordinates?.lng && (
+                  <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden' }}>
+                    <MapView
+                      markers={[{
+                        id: `store-${restaurant.id}`,
+                        lat: restaurant.coordinates.lat,
+                        lng: restaurant.coordinates.lng,
+                        type: 'store',
+                        label: restaurant.name,
+                      }]}
+                      height={200}
+                    />
+                  </div>
+                )}
               </Space>
             </Card>
           ),
@@ -960,3 +1029,5 @@ const RestaurantDetailPage: React.FC = () => {
 };
 
 export default RestaurantDetailPage;
+
+

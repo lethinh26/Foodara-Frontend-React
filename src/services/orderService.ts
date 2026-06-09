@@ -32,6 +32,26 @@ export interface PlaceOrderApiResponse {
   estimatedDeliveryTime: number;
 }
 
+export interface OrderTrackingResponse {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  storeId: string;
+  storeName: string;
+  storeLatitude: number;
+  storeLongitude: number;
+  deliveryLatitude: number;
+  deliveryLongitude: number;
+  driverId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  driverLatitude: number | null;
+  driverLongitude: number | null;
+  distanceKm: number | null;
+  etaMinutes: number | null;
+  polyline: string | null;
+}
+
 function mapBackendOrder(raw: any): Order {
   const pricing = {
     subtotal: raw.subtotal ?? 0,
@@ -174,6 +194,36 @@ export const orderService = {
     try {
       const raw = await apiClient.get<any>(`/v1/orders/${id}`);
       return mapBackendOrder(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  async getOrderTracking(id: string): Promise<OrderTrackingResponse | null> {
+    if (env.isMockMode) {
+      await delay(400);
+      return {
+        orderId: id,
+        orderNumber: 'FD-MOCK',
+        status: 'delivering',
+        storeId: '',
+        storeName: 'Mock Store',
+        storeLatitude: 10.8231,
+        storeLongitude: 106.6297,
+        deliveryLatitude: 10.8500,
+        deliveryLongitude: 106.6500,
+        driverId: null,
+        driverName: null,
+        driverPhone: null,
+        driverLatitude: null,
+        driverLongitude: null,
+        distanceKm: null,
+        etaMinutes: null,
+        polyline: null,
+      };
+    }
+    try {
+      return await apiClient.get<OrderTrackingResponse>(`/v1/orders/${id}/tracking`);
     } catch {
       return null;
     }

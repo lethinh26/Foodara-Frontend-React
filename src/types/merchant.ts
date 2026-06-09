@@ -19,6 +19,12 @@ export interface MerchantRegisterRequest {
   businessPhone?: string;
   logoUrl?: string;
   coverImageUrl?: string;
+  addressLine?: string;
+  ward?: string;
+  districtName?: string;
+  cityName?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface MerchantProfileRequest {
