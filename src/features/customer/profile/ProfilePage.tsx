@@ -386,6 +386,7 @@ const ProfilePage: React.FC = () => {
         footer={null}
         width={540}
         destroyOnHidden
+        maskClosable={false}
       >
         <Form form={addressForm} layout="vertical" onFinish={handleSaveAddress} style={{ marginTop: 16 }}>
           <Form.Item name="label" label="Loại địa chỉ" rules={[{ required: true, message: 'Chọn loại địa chỉ' }]}>

@@ -26,17 +26,14 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [bannerRes, cats, feat, near] = await Promise.all([
+        const [bannerRes, cats, feat] = await Promise.all([
           homeService.getBanners(),
           homeService.getCategories(),
           homeService.getPopularStores(10),
-          homeService.getNearbyStores(undefined, undefined, 10),
         ]);
         setBanners(bannerRes);
         setCategories(cats);
         setFeatured(feat);
-        setNearby(near);
-        // For all restaurants, use popular stores for now
         setAllRestaurants(feat);
       } catch (e) {
         console.error("Failed to load home data", e);
@@ -46,6 +43,14 @@ const HomePage: React.FC = () => {
     };
     load();
   }, []);
+
+  // Fetch nearby when userOrigin is resolved
+  useEffect(() => {
+    if (!userOrigin) return;
+    homeService.getNearbyStores(userOrigin.lat, userOrigin.lng, 10)
+      .then(n => setNearby(n))
+      .catch(() => setNearby([]));
+  }, [userOrigin]);
 
   // Resolve origin: default address -> geolocation -> none
   useEffect(() => {
@@ -193,26 +198,52 @@ const HomePage: React.FC = () => {
         </Carousel>
       )}
 
-      {/* Categories */}
-      <div className="section">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Title level={5} style={{ margin: 0 }}>Danh mục</Title>
+      {/* Categories — Clean Image Cards */}
+      <div className="section" style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <Title level={5} style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Danh mục</Title>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 12 }}>
+        <div style={{
+          display: 'flex', gap: 14, overflowX: 'auto', padding: '2px 2px 8px',
+          scrollbarWidth: 'none', msOverflowStyle: 'none',
+        }}>
           {categories.map(cat => (
-            <div key={cat.id} onClick={() => navigate(`/customer/search?category=${cat.id}`)}
-              style={{ textAlign: 'center', cursor: 'pointer', padding: '12px 4px', borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border-soft)', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-soft)'; e.currentTarget.style.boxShadow = 'none'; }}
+            <div
+              key={cat.id}
+              onClick={() => navigate(`/customer/search?category=${cat.id}`)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                cursor: 'pointer', userSelect: 'none', flexShrink: 0, width: 84,
+                transition: 'transform 0.2s ease',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
             >
-              <div style={{ fontSize: 24, marginBottom: 8, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                width: 80, height: 80, borderRadius: 12, overflow: 'hidden',
+                background: '#f2f2f2',
+                border: '1px solid #eee',
+              }}>
                 {cat.icon.startsWith('http') ? (
-                  <img src={cat.icon} alt={cat.name} style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                  <img src={cat.icon} alt={cat.name} style={{
+                    width: '100%', height: '100%', objectFit: 'cover',
+                  }} />
                 ) : (
-                  cat.icon
+                  <div style={{
+                    width: '100%', height: '100%', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontSize: 32, background: '#fafafa',
+                  }}>
+                    {cat.icon}
+                  </div>
                 )}
               </div>
-              <Text style={{ fontSize: 13, fontWeight: 600 }}>{cat.name}</Text>
+              <Text style={{
+                fontSize: 12, fontWeight: 500, color: '#333',
+                textAlign: 'center', lineHeight: 1.3,
+              }}>
+                {cat.name}
+              </Text>
             </div>
           ))}
         </div>

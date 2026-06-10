@@ -32,7 +32,8 @@ import { formatVND } from '../../../utils/format';
 import type { Voucher, VoucherCartPricing } from '../../../types/promotion';
 import type { PaymentMethod } from '../../../types/payment';
 import type { AddressResponse, AddressRequest } from '../../../services/authService';
-import type { ProvinceItem, DistrictItem, WardItem } from '../../../services/locationService';
+import AddressAutocomplete, { type SelectedAddress } from '../../../components/map/AddressAutocomplete';
+import MapPicker from '../../../components/map/MapPicker';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -85,14 +86,8 @@ const CheckoutPage: React.FC = () => {
     const [addressModal, setAddressModal] = useState(false);
     const [editAddress, setEditAddress] = useState<AddressResponse | null>(null);
     const [savingAddress, setSavingAddress] = useState(false);
+    const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [addressForm] = Form.useForm();
-
-    const [provinces, setProvinces] = useState<ProvinceItem[]>([]);
-    const [districts, setDistricts] = useState<DistrictItem[]>([]);
-    const [wards, setWards] = useState<WardItem[]>([]);
-    const [loadingProvinces, setLoadingProvinces] = useState(false);
-    const [loadingDistricts, setLoadingDistricts] = useState(false);
-    const [loadingWards, setLoadingWards] = useState(false);
 
     const loadAddresses = async () => {
         setLoadingAddresses(true);
@@ -111,38 +106,8 @@ const CheckoutPage: React.FC = () => {
         }
     };
 
-    const loadProvinces = async () => {
-        setLoadingProvinces(true);
-        try {
-            const result = await locationService.getProvinces();
-            setProvinces(result);
-        } catch { setProvinces([]); }
-        finally { setLoadingProvinces(false); }
-    };
-
-    const loadDistricts = async (provinceCode: number) => {
-        setLoadingDistricts(true);
-        setDistricts([]); setWards([]);
-        try {
-            const result = await locationService.getDistricts(provinceCode);
-            setDistricts(result);
-        } catch { setDistricts([]); }
-        finally { setLoadingDistricts(false); }
-    };
-
-    const loadWards = async (districtCode: number) => {
-        setLoadingWards(true);
-        setWards([]);
-        try {
-            const result = await locationService.getWards(districtCode);
-            setWards(result);
-        } catch { setWards([]); }
-        finally { setLoadingWards(false); }
-    };
-
     const openAddressModal = (addr?: AddressResponse) => {
         setEditAddress(addr || null);
-        setDistricts([]); setWards([]);
         if (addr) {
             addressForm.setFieldsValue({
                 label: addr.label || 'home',
@@ -152,10 +117,18 @@ const CheckoutPage: React.FC = () => {
                 ward: addr.ward,
                 deliveryNote: addr.deliveryNote,
                 isDefault: addr.isDefault,
+                districtName: addr.districtName,
+                cityName: addr.cityName,
+                latitude: addr.latitude ?? undefined,
+                longitude: addr.longitude ?? undefined,
             });
+            const lat = typeof addr.latitude === 'number' ? addr.latitude : Number(addr.latitude);
+            const lng = typeof addr.longitude === 'number' ? addr.longitude : Number(addr.longitude);
+            setPickedCoords(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
         } else {
             addressForm.resetFields();
             addressForm.setFieldsValue({ label: 'home', isDefault: false });
+            setPickedCoords(null);
         }
         setAddressModal(true);
     };
@@ -163,19 +136,18 @@ const CheckoutPage: React.FC = () => {
     const handleSaveAddress = async (values: Record<string, unknown>) => {
         setSavingAddress(true);
         try {
-            const selProv = provinces.find(p => p.code === values.provinceCode);
-            const selDist = districts.find(d => d.code === values.districtCode);
-            const selWard = wards.find(w => w.code === values.wardCode);
             const request: AddressRequest = {
                 label: values.label as string,
                 recipientName: values.recipientName as string | undefined,
                 recipientPhone: values.recipientPhone as string | undefined,
                 addressLine: values.addressLine as string,
-                ward: selWard?.name || (values.ward as string) || '',
-                cityName: selProv?.name || '',
-                districtName: selDist?.name || '',
+                ward: values.ward as string || '',
+                cityName: values.cityName as string || '',
+                districtName: values.districtName as string || '',
                 deliveryNote: values.deliveryNote as string | undefined,
                 isDefault: (values.isDefault as boolean) || false,
+                latitude: (values.latitude as number) ?? pickedCoords?.lat ?? null,
+                longitude: (values.longitude as number) ?? pickedCoords?.lng ?? null,
             };
             if (editAddress) {
                 await authService.updateAddress(editAddress.id, request);
@@ -237,7 +209,6 @@ const CheckoutPage: React.FC = () => {
 
     useEffect(() => {
         void loadAddresses();
-        void loadProvinces();
     }, []);
 
     useEffect(() => {
@@ -461,17 +432,28 @@ const CheckoutPage: React.FC = () => {
                 </div>
                 <Select
                     value={selectedAddress || undefined}
-                    onChange={(val: string) => { if (val === ADD_ADDRESS_VALUE) { openAddressModal(); } else { setSelectedAddress(val); } }}
+                    onChange={(val: string) => setSelectedAddress(val)}
                     style={{ width: '100%' }}
                     loading={loadingAddresses}
                     placeholder="Chọn địa chỉ giao hàng"
-                    options={[
-                        ...addresses.map(a => {
-                            const lbl = labelOptions.find(o => o.value === a.label)?.label || a.label;
-                            return { value: a.id, label: `${lbl} - ${[a.addressLine, a.ward].filter(Boolean).join(', ')}` };
-                        }),
-                        { value: ADD_ADDRESS_VALUE, label: '+ Thêm địa chỉ mới' },
-                    ]}
+                    options={addresses.map(a => {
+                        const lbl = labelOptions.find(o => o.value === a.label)?.label || a.label;
+                        return { value: a.id, label: `${lbl} - ${[a.addressLine, a.ward].filter(Boolean).join(', ')}` };
+                    })}
+                    dropdownRender={(menu) => (
+                        <>
+                            {menu}
+                            <Divider style={{ margin: '4px 0' }} />
+                            <Button
+                                type="link"
+                                icon={<Plus size={14} />}
+                                onClick={() => openAddressModal()}
+                                style={{ padding: '4px 8px', width: '100%', textAlign: 'left', fontWeight: 500 }}
+                            >
+                                Thêm địa chỉ mới
+                            </Button>
+                        </>
+                    )}
                 />
                 {!selectedAddress && <Text type="warning" style={{ color: '#ff4d4f', marginTop: 8, display: 'block' }}>Vui lòng chọn địa chỉ giao hàng.</Text>}
             </Card>
@@ -680,7 +662,7 @@ const CheckoutPage: React.FC = () => {
                 </span>
             </Button>
 
-            <Modal open={voucherModal} onCancel={() => setVoucherModal(false)} title="Chọn voucher áp dụng" footer={<Button type="primary" onClick={() => setVoucherModal(false)}>Đóng</Button>} width={560}>
+            <Modal open={voucherModal} onCancel={() => setVoucherModal(false)} title="Chọn voucher áp dụng" footer={<Button type="primary" onClick={() => setVoucherModal(false)}>Đóng</Button>} width={560} maskClosable={false}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {vouchers.length === 0 && <Text type="secondary">Bạn chưa có voucher nào cho cửa hàng này.</Text>}
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -777,59 +759,77 @@ const CheckoutPage: React.FC = () => {
                 footer={null}
                 width={540}
                 destroyOnHidden
+                maskClosable={false}
             >
                 <Form form={addressForm} layout="vertical" onFinish={handleSaveAddress} style={{ marginTop: 16 }}>
                     <Form.Item name="label" label="Loại địa chỉ" rules={[{ required: true, message: 'Chọn loại địa chỉ' }]}>
                         <Select options={labelOptions} />
                     </Form.Item>
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <Form.Item name="recipientName" label="Tên người nhận">
                             <Input prefix={<User size={14} />} placeholder="Nguyễn Văn A" />
                         </Form.Item>
-                        <Form.Item name="recipientPhone" label="SĐT người nhận" rules={[{ pattern: /^0[0-9]{9}$/, message: 'SĐT phải có 10 chữ số' }]}>
+                        <Form.Item name="recipientPhone" label="SĐT người nhận" rules={[
+                            { pattern: /^0[0-9]{9}$/, message: 'SĐT phải có 10 chữ số' }
+                        ]}>
                             <Input prefix={<Phone size={14} />} placeholder="0901234567" maxLength={10} />
                         </Form.Item>
                     </div>
-                    <Form.Item name="addressLine" label="Địa chỉ chi tiết" rules={[{ required: true, message: 'Vui lòng nhập địa chỉ' }]}>
-                        <Input prefix={<MapPin size={14} />} placeholder="Số nhà, tên đường" />
-                    </Form.Item>
-                    <Form.Item name="provinceCode" label="Tỉnh / Thành phố">
-                        <Select
-                            showSearch placeholder="Chọn tỉnh/thành phố" loading={loadingProvinces}
-                            options={provinces.map(p => ({ value: p.code, label: p.name }))}
-                            filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                            onChange={(val) => { addressForm.setFieldsValue({ districtCode: undefined, wardCode: undefined }); setDistricts([]); setWards([]); if (val) loadDistricts(val); }}
-                            allowClear
+
+                    <Form.Item name="addressLine" label="Địa chỉ" rules={[{ required: true, message: 'Vui lòng chọn địa chỉ' }]}>
+                        <AddressAutocomplete
+                            value={addressForm.getFieldValue('addressLine')}
+                            onSelect={(s: SelectedAddress) => {
+                                addressForm.setFieldsValue({
+                                    addressLine: s.fullAddress,
+                                    ward: s.ward,
+                                    districtName: s.districtName,
+                                    cityName: s.cityName,
+                                    latitude: s.lat,
+                                    longitude: s.lng,
+                                });
+                                setPickedCoords({ lat: s.lat, lng: s.lng });
+                            }}
                         />
                     </Form.Item>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <Form.Item name="districtCode" label="Quận / Huyện">
-                            <Select
-                                showSearch placeholder="Chọn quận/huyện" loading={loadingDistricts}
-                                options={districts.map(d => ({ value: d.code, label: d.name }))}
-                                filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                                onChange={(val) => { addressForm.setFieldValue('wardCode', undefined); setWards([]); if (val) loadWards(val); }}
-                                allowClear disabled={districts.length === 0}
-                            />
-                        </Form.Item>
-                        <Form.Item name="wardCode" label="Phường / Xã">
-                            <Select
-                                showSearch placeholder="Chọn phường/xã" loading={loadingWards}
-                                options={wards.map(w => ({ value: w.code, label: w.name }))}
-                                filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
-                                allowClear disabled={wards.length === 0}
-                            />
-                        </Form.Item>
-                    </div>
+                    <Form.Item label="Vị trí trên bản đồ" tooltip="Kéo ghim hoặc click để chỉnh toạ độ">
+                        <MapPicker
+                            value={pickedCoords ?? undefined}
+                            onChange={async (c) => {
+                                setPickedCoords(c);
+                                addressForm.setFieldsValue({ latitude: c.lat, longitude: c.lng });
+                                try {
+                                    const r = await locationService.reverseGeocode(c.lat, c.lng);
+                                    addressForm.setFieldsValue({
+                                        addressLine: r.formattedAddress || addressForm.getFieldValue('addressLine'),
+                                        ward: r.ward ?? addressForm.getFieldValue('ward'),
+                                        districtName: r.districtName ?? addressForm.getFieldValue('districtName'),
+                                        cityName: r.cityName ?? addressForm.getFieldValue('cityName'),
+                                    });
+                                } catch { /* ignore */ }
+                            }}
+                            height={260}
+                        />
+                    </Form.Item>
+                    <Form.Item name="latitude" hidden><Input /></Form.Item>
+                    <Form.Item name="longitude" hidden><Input /></Form.Item>
+                    <Form.Item name="ward" hidden><Input /></Form.Item>
+                    <Form.Item name="districtName" hidden><Input /></Form.Item>
+                    <Form.Item name="cityName" hidden><Input /></Form.Item>
                     <Form.Item name="deliveryNote" label="Ghi chú giao hàng">
                         <TextArea rows={2} placeholder="Tầng 3, phòng 302, gọi trước khi giao..." />
                     </Form.Item>
+
                     <Form.Item name="isDefault" valuePropName="checked" style={{ marginBottom: 8 }}>
                         <Checkbox>Đặt làm địa chỉ mặc định</Checkbox>
                     </Form.Item>
+
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
                         <Button onClick={() => { setAddressModal(false); addressForm.resetFields(); }}>Huỷ</Button>
-                        <Button type="primary" htmlType="submit" loading={savingAddress}>{editAddress ? 'Cập nhật' : 'Thêm địa chỉ'}</Button>
+                        <Button type="primary" htmlType="submit" loading={savingAddress}>
+                            {editAddress ? 'Cập nhật' : 'Thêm địa chỉ'}
+                        </Button>
                     </div>
                 </Form>
             </Modal>
