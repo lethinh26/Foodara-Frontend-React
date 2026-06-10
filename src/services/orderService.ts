@@ -264,4 +264,8 @@ export const orderService = {
     }
     throw new Error('Not implemented — use merchant-specific endpoints');
   },
+
+  async chooseRefund(orderId: string, type: 'bank' | 'voucher'): Promise<{ voucherCode?: string; discountValue?: number }> {
+    return apiClient.post<{ voucherCode?: string; discountValue?: number }>(`/v1/orders/${orderId}/refund`, { type });
+  },
 };

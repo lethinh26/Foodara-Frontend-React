@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, Typography, Steps, Tag, Button, Spin, Divider, Avatar, message } from 'antd';
-import { Phone, MapPin, Store, Bike, Clock, CheckCircle2, ArrowLeft, QrCode, Copy, CreditCard, Banknote, Package, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Card, Typography, Steps, Tag, Button, Spin, Divider, Avatar, message, Space } from 'antd';
+import { Phone, MapPin, Store, Bike, Clock, CheckCircle2, ArrowLeft, QrCode, Copy, CreditCard, Banknote, Package, ShieldCheck, AlertTriangle, Ticket, CheckCircle } from 'lucide-react';
 import { orderService } from '../../../services/orderService';
 import type { OrderTrackingResponse } from '../../../services/orderService';
 import { useWebSocket } from '../../../hooks/useWebSocket';
@@ -67,14 +67,17 @@ const OrderTrackingPage: React.FC = () => {
   const [qrCopied, setQrCopied] = useState(false);
   const [tracking, setTracking] = useState<OrderTrackingResponse | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [refundChoice, setRefundChoice] = useState<'bank' | 'voucher' | null>(null);
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundResult, setRefundResult] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useWebSocket({
+  useWebSocket<{ status?: string; driverLatitude?: number; driverLongitude?: number }>({
     topic: id ? `/topic/orders.${id}` : undefined,
     onMessage: (msg) => {
       if (msg && msg.status) {
-        setOrder(prev => prev ? { ...prev, ...msg } : prev);
+        setOrder(prev => prev ? { ...prev, status: msg.status as Order['status'] } : prev);
         message.info('Trạng thái đơn hàng vừa được cập nhật!');
       }
       // If driver location included, refresh tracking
@@ -153,8 +156,33 @@ const OrderTrackingPage: React.FC = () => {
   const countdownSec = countdown !== null ? Math.floor((countdown % 60000) / 1000) : 0;
   const isExpired = countdown !== null && countdown <= 0;
 
+  const handleRefundChoose = (choice: 'bank' | 'voucher') => {
+    setRefundChoice(choice);
+    setRefundResult(null);
+  };
+
+  const handleRefundConfirm = async () => {
+    if (!refundChoice) return;
+    setRefundSubmitting(true);
+    try {
+      if (refundChoice === 'bank') {
+        await orderService.chooseRefund(order!.id, 'bank');
+        message.success('Đã ghi nhận yêu cầu hoàn tiền. Chúng tôi sẽ xử lý trong vòng 24h.');
+      } else {
+        await orderService.chooseRefund(order!.id, 'voucher');
+        message.success('Voucher hoàn tiền đã được tạo và thêm vào ví của bạn!');
+      }
+      // Redirect to home with refund notification for NotificationService
+      navigate(`/?refund=done&type=${refundChoice}&amount=${order!.pricing.total}&orderNumber=${order!.orderNumber}`);
+    } catch {
+      message.error('Không thể xử lý yêu cầu. Vui lòng thử lại.');
+    } finally {
+      setRefundSubmitting(false);
+    }
+  };
+
   const handleCopyAccount = () => {
-    navigator.clipboard.writeText('0123456789 - FOODARA JSC - MB Bank');
+    navigator.clipboard.writeText('0943941773 MBBank Foodara');
     setQrCopied(true);
     setTimeout(() => setQrCopied(false), 2000);
   };
@@ -204,6 +232,97 @@ const OrderTrackingPage: React.FC = () => {
             </Text>
           </div>
         </div>
+      )}
+      {/* Refund section for cancelled paid QR orders */}
+      {isCancelled && isQrPayment && order.paymentStatus === 'paid' && (
+        <Card style={{
+          borderRadius: 16, marginBottom: 20, border: '2px solid #FF9800',
+          boxShadow: '0 4px 20px rgba(255,152,0,0.12)', overflow: 'hidden',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FF9800 0%, #FFB74D 100%)',
+            margin: '-24px -24px 20px', padding: '20px 24px',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 12,
+              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <AlertTriangle size={22} color="#fff" />
+            </div>
+            <div>
+              <Text style={{ color: '#fff', fontWeight: 700, fontSize: 16, display: 'block' }}>Hoàn tiền</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Đơn hàng đã thanh toán {formatVND(order.pricing.total)}, vui lòng chọn hình thức hoàn tiền</Text>
+            </div>
+          </div>
+
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Card
+              hoverable
+              onClick={() => handleRefundChoose('bank')}
+              style={{
+                borderRadius: 12, border: refundChoice === 'bank' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                background: refundChoice === 'bank' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              bodyStyle={{ padding: '16px 18px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #43A047, #66BB6A)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Banknote size={22} color="#fff" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Text strong style={{ fontSize: 14, display: 'block' }}>Hoàn tiền về tài khoản</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Chúng tôi sẽ xử lý hoàn tiền trong 24h</Text>
+                </div>
+                {refundChoice === 'bank' && <CheckCircle size={20} color="var(--primary)" />}
+              </div>
+            </Card>
+
+            <Card
+              hoverable
+              onClick={() => handleRefundChoose('voucher')}
+              style={{
+                borderRadius: 12, border: refundChoice === 'voucher' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                background: refundChoice === 'voucher' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              bodyStyle={{ padding: '16px 18px' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Ticket size={22} color="#fff" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Text strong style={{ fontSize: 14, display: 'block' }}>Nhận mã voucher</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Nhận voucher giảm giá {formatVND(order.pricing.total)} cho đơn sau</Text>
+                </div>
+                {refundChoice === 'voucher' && <CheckCircle size={20} color="var(--primary)" />}
+              </div>
+            </Card>
+
+            {refundResult && (
+              <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(76,175,80,0.08)', border: '1px dashed var(--success)' }}>
+                <Text style={{ color: 'var(--success)', fontWeight: 600, fontSize: 14, display: 'block' }}>
+                  {refundResult}
+                </Text>
+              </div>
+            )}
+
+            <Button
+              type="primary"
+              block
+              size="large"
+              loading={refundSubmitting}
+              disabled={!refundChoice}
+              onClick={handleRefundConfirm}
+              style={{ height: 48, borderRadius: 12, fontWeight: 600 }}
+            >
+              {refundChoice === 'voucher' ? 'Xác nhận nhận voucher' : 'Xác nhận hoàn tiền'}
+            </Button>
+          </Space>
+        </Card>
       )}
 
       {/* Order Status Card */}
@@ -319,19 +438,12 @@ const OrderTrackingPage: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            {/* QR Code placeholder */}
-            <div style={{
-              width: 200, height: 200, borderRadius: 16,
-              border: '2px dashed rgba(108,92,231,0.3)',
-              background: 'linear-gradient(135deg, rgba(108,92,231,0.04) 0%, rgba(162,155,254,0.08) 100%)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 8, flexShrink: 0,
-            }}>
-              <QrCode size={64} color="#6C5CE7" strokeWidth={1.5} />
-              <Text type="secondary" style={{ fontSize: 11, textAlign: 'center', padding: '0 12px' }}>
-                QR Code sẽ hiển thị ở đây
-              </Text>
-            </div>
+            {/* Real SePay QR */}
+            <img
+              src={`https://qr.sepay.vn/img?bank=MBBank&acc=0943941773&template=compact&des=${order.orderNumber}&amount=${order.pricing.total}`}
+              alt="QR Payment"
+              style={{ width: 200, height: 200, borderRadius: 16, flexShrink: 0 }}
+            />
 
             {/* Payment info */}
             <div style={{ flex: 1, minWidth: 200 }}>
@@ -352,9 +464,9 @@ const OrderTrackingPage: React.FC = () => {
                 border: '1px solid var(--border-soft)',
               }}>
                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Thông tin chuyển khoản</Text>
-                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>Ngân hàng: MB Bank</Text>
-                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>STK: 0123456789</Text>
-                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>Chủ TK: FOODARA JSC</Text>
+                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>Ngân hàng: MBBank</Text>
+                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>STK: 0943941773</Text>
+                <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>Chủ TK: FOODARA</Text>
                 <Text style={{ fontSize: 13, display: 'block', fontWeight: 500 }}>
                   Nội dung: <Text copyable={{ text: order.orderNumber }} style={{ fontWeight: 700, color: '#6C5CE7' }}>{order.orderNumber}</Text>
                 </Text>
@@ -362,7 +474,7 @@ const OrderTrackingPage: React.FC = () => {
 
               <Button
                 block
-                icon={<Copy size={14} />}
+                icon={qrCopied ? <CheckCircle size={14} /> : <Copy size={14} />}
                 onClick={handleCopyAccount}
                 style={{
                   borderRadius: 10, height: 40, fontWeight: 600,

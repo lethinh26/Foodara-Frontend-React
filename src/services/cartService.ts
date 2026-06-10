@@ -357,15 +357,12 @@ export const cartService = {
           issues: [{ code: 'EMPTY_CART', message: 'Gio hang dang trong', cartItemId: null }],
         };
       }
-      const shortfallAmount = Math.max(mockSnapshot.storeMinOrderAmount - mockSnapshot.subtotal, 0);
       return {
-        valid: shortfallAmount === 0,
+        valid: true,
         subtotal: mockSnapshot.subtotal,
-        minOrderAmount: mockSnapshot.storeMinOrderAmount,
-        shortfallAmount,
-        issues: shortfallAmount > 0
-          ? [{ code: 'MIN_ORDER_NOT_REACHED', message: 'Don hang chua dat gia tri toi thieu', cartItemId: null }]
-          : [],
+        minOrderAmount: 0,
+        shortfallAmount: 0,
+        issues: [],
       };
     }
 

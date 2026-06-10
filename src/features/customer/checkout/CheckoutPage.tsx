@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Button, Typography, Divider, Radio, Empty, message, Select, Input, Space, Tag, Modal, Form, Checkbox } from 'antd';
-import { Trash2, Plus, Minus, MapPin, Ticket, CreditCard, ArrowLeft, ShieldCheck, User, Phone } from 'lucide-react';
+import { Trash2, Plus, Minus, MapPin, Ticket, CreditCard, ArrowLeft, ShieldCheck, User, Phone, QrCode, Copy, CheckCircle, Clock } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '../../../hooks/useStore';
 import {
     clearCart,
@@ -88,6 +88,27 @@ const CheckoutPage: React.FC = () => {
     const [savingAddress, setSavingAddress] = useState(false);
     const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [addressForm] = Form.useForm();
+
+    // QR inline state
+    const [placed, setPlaced] = useState(false);
+    const [qrOrder, setQrOrder] = useState<{ orderId: string; orderNumber: string; totalAmount: number } | null>(null);
+    const qrPollRef = useRef<ReturnType<typeof setInterval>>();
+
+    // Poll QR payment when placed
+    useEffect(() => {
+        if (!placed || !qrOrder) return;
+        const poll = async () => {
+            try {
+                const order = await orderService.getOrderById(qrOrder.orderId);
+                if (order && (order.paymentStatus === 'paid' || order.paymentStatus === 'PAID')) {
+                    message.success('Thanh toán thành công!');
+                    navigate(`/customer/order/${qrOrder.orderId}`);
+                }
+            } catch { /* ignore */ }
+        };
+        qrPollRef.current = setInterval(poll, 3000);
+        return () => { if (qrPollRef.current) clearInterval(qrPollRef.current); };
+    }, [placed, qrOrder, navigate]);
 
     const loadAddresses = async () => {
         setLoadingAddresses(true);
@@ -403,8 +424,14 @@ const CheckoutPage: React.FC = () => {
             await dispatch(clearCart()).unwrap();
             message.success('Đặt hàng thành công!');
 
-            if (paymentMethod === 'qr' && result.checkoutUrl) {
-                window.location.href = result.checkoutUrl;
+            if (paymentMethod === 'qr') {
+                // Show QR inline instead of navigating
+                setQrOrder({
+                    orderId: result.orderId,
+                    orderNumber: result.orderNumber,
+                    totalAmount: result.totalAmount,
+                });
+                setPlaced(true);
             } else {
                 navigate(`/customer/order/${result.orderId}`);
             }
@@ -416,6 +443,47 @@ const CheckoutPage: React.FC = () => {
         }
     };
 
+    // QR inline view after placing order
+    if (placed && qrOrder) {
+        const qrUrl = `https://qr.sepay.vn/img?bank=MBBank&acc=0943941773&template=compact&des=${qrOrder.orderNumber}&amount=${qrOrder.totalAmount}`;
+        const copyCode = () => {
+            navigator.clipboard.writeText(qrOrder.orderNumber);
+            message.success('Đã sao mã!');
+        };
+        return (
+            <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 100px' }} className="animate-fade-in">
+                <div style={{ textAlign: 'center', marginBottom: 24 }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                        <QrCode size={28} color="#fff" />
+                    </div>
+                    <Title level={4} style={{ margin: 0 }}>Quét mã để thanh toán</Title>
+                    <Text type="secondary">Mở app ngân hàng, quét mã QR và chuyển khoản đúng nội dung</Text>
+                </div>
+                <Card style={{ borderRadius: 16, border: '1.5px solid var(--border-soft)', boxShadow: 'var(--shadow-md)', marginBottom: 20, padding: 20, textAlign: 'center' }}>
+                    <img src={qrUrl} alt="QR" style={{ width: 240, height: 240, borderRadius: 12, marginBottom: 16 }} />
+                    <div onClick={copyCode} style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--surface-soft)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                        <div style={{ textAlign: 'left' }}>
+                            <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Nội dung CK</Text>
+                            <Text strong style={{ fontSize: 18, fontFamily: 'monospace' }}>{qrOrder.orderNumber}</Text>
+                        </div>
+                        <Button icon={<Copy size={16} />} size="small">Sao chép</Button>
+                    </div>
+                </Card>
+                <Card style={{ borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)', marginBottom: 20 }}>
+                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Số tiền</Text><Text strong style={{ fontSize: 18, color: 'var(--primary)' }}>{formatVND(qrOrder.totalAmount)}</Text></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Ngân hàng</Text><Text>MBBank</Text></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Số TK</Text><Text strong style={{ fontFamily: 'monospace' }}>0943941773</Text></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary"><Clock size={14} style={{ marginRight: 4 }} />Trạng thái</Text><Tag color="processing">Đang chờ thanh toán...</Tag></div>
+                    </Space>
+                </Card>
+                <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
+                    Hệ thống tự xác nhận khi nhận chuyển khoản. Trang sẽ tự chuyển sang theo dõi đơn hàng.
+                </Text>
+            </div>
+        );
+    }
+
     return (
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 24px 100px' }} className="animate-fade-in">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
@@ -425,7 +493,7 @@ const CheckoutPage: React.FC = () => {
 
             <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #FF6B6B 0%, #ee5a24 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FF6B6B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <MapPin size={18} color="#fff" />
                     </div>
                     <Text strong style={{ fontSize: 15 }}>Địa chỉ giao hàng</Text>
@@ -510,14 +578,9 @@ const CheckoutPage: React.FC = () => {
                 )}
             </Card>
 
-            {(minOrderAmount > 0 || !isStoreOpen || (cartValidation && !cartValidation.valid)) && (
+            {(!isStoreOpen || (cartValidation && !cartValidation.valid)) && (
                 <Card style={{ marginBottom: 16, borderRadius: 12, borderColor: 'var(--warning)' }}>
                     {!isStoreOpen && <Text style={{ display: 'block', color: 'var(--danger)' }}>Cửa hàng hiện đang đóng cửa.</Text>}
-                    {minOrderAmount > 0 && subtotal < minOrderAmount && (
-                        <Text style={{ display: 'block', color: 'var(--danger)' }}>
-                            Đơn hàng chưa đạt tối thiểu {formatVND(minOrderAmount)}.
-                        </Text>
-                    )}
                     {cartValidation?.issues.map(issue => (
                         <Text key={`${issue.code}-${issue.cartItemId ?? 'cart'}`} style={{ display: 'block', color: 'var(--danger)' }}>
                             {issue.message}
@@ -533,7 +596,7 @@ const CheckoutPage: React.FC = () => {
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                             <Ticket size={20} color="#fff" />
                         </div>
                         <div>
@@ -564,7 +627,7 @@ const CheckoutPage: React.FC = () => {
 
             <Card style={{ marginBottom: 16, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: '#6C5CE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <CreditCard size={18} color="#fff" />
                     </div>
                     <Text strong style={{ fontSize: 15 }}>Phương thức thanh toán</Text>
@@ -618,7 +681,7 @@ const CheckoutPage: React.FC = () => {
 
             <Card style={{ marginBottom: 24, borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-md)', overflow: 'hidden' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--primary-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <ShieldCheck size={18} color="#fff" />
                     </div>
                     <Text strong style={{ fontSize: 15 }}>Chi tiết thanh toán</Text>
@@ -642,7 +705,7 @@ const CheckoutPage: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}><Text type="secondary">Phí nền tảng</Text><Text>{formatVND(platformFee)}</Text></div>
                 </div>
                 <Divider style={{ margin: '12px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderRadius: 10, background: 'linear-gradient(135deg, rgba(76,175,80,0.06) 0%, rgba(56,142,60,0.1) 100%)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderRadius: 10, background: 'rgba(76,175,80,0.06)' }}>
                     <Text strong style={{ fontSize: 16 }}>Tổng cộng</Text>
                     <Text strong style={{ fontSize: 20, color: 'var(--primary)' }}>{formatVND(total)}</Text>
                 </div>
@@ -654,7 +717,7 @@ const CheckoutPage: React.FC = () => {
                 size="large"
                 loading={loading || cartLoading || previewLoading}
                 onClick={handleOrder}
-                disabled={!selectedAddress || !isStoreOpen || (minOrderAmount > 0 && subtotal < minOrderAmount)}
+                disabled={!selectedAddress || !isStoreOpen}
                 style={{ height: 56, borderRadius: 14, fontWeight: 700, fontSize: 16, boxShadow: '0 4px 16px rgba(76,175,80,0.3)', letterSpacing: 0.3 }}
             >
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
