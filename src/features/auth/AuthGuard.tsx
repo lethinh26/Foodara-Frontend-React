@@ -1,12 +1,12 @@
 import React from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { Spin } from 'antd';
 import { useAppSelector } from '../../hooks/useStore';
 import { selectIsAuthenticated, selectRole, selectAuthStatus } from '../../store/authSlice';
 import type { UserRole } from '../../types/user';
 
 interface AuthGuardProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   requiredRole: UserRole;
 }
 
@@ -33,6 +33,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
     return <Navigate to="/unauthorized" replace />;
   }
 
-  return <>{children}</>;
+  // Support both children (wrapper mode) and Outlet (route nesting mode)
+  return <>{children || <Outlet />}</>;
 };
 

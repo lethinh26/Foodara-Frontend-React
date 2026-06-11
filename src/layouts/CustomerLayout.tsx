@@ -42,9 +42,9 @@ export const CustomerLayout: React.FC = () => {
 
   const navItems = [
     { key: '/customer', icon: <Home size={18} />, label: 'Trang chủ' },
-    { key: '/customer/orders', icon: <ClipboardList size={18} />, label: 'Đơn hàng' },
-    { key: '/customer/vouchers', icon: <Ticket size={18} />, label: 'Voucher' },
-    { key: '/customer/favorites', icon: <Heart size={18} />, label: 'Yêu thích' },
+    { key: '/customer/orders', icon: <ClipboardList size={18} />, label: 'Đơn hàng', authOnly: true },
+    { key: '/customer/vouchers', icon: <Ticket size={18} />, label: 'Voucher', authOnly: true },
+    { key: '/customer/favorites', icon: <Heart size={18} />, label: 'Yêu thích', authOnly: true },
   ];
 
   return (
@@ -111,8 +111,21 @@ export const CustomerLayout: React.FC = () => {
         <Menu
           mode="horizontal"
           selectedKeys={[location.pathname]}
-          items={navItems}
-          onClick={({ key }) => navigate(key)}
+          items={navItems
+            .filter(item => !item.authOnly || !!user)
+            .map(item => ({
+              key: item.key,
+              icon: item.icon,
+              label: item.label,
+            }))}
+          onClick={({ key }) => {
+            const item = navItems.find(n => n.key === key);
+            if (item?.authOnly && !user) {
+              navigate('/customer/login', { state: { from: { pathname: key } } });
+            } else {
+              navigate(key);
+            }
+          }}
           style={{ justifyContent: 'center', borderBottom: 'none', background: 'transparent' }}
         />
         <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>

@@ -76,18 +76,22 @@ export const AppRouter: React.FC = () => {
           <Route path="/admin/login" element={<LoginPage role="admin" />} />
           <Route path="/merchant/register" element={<React.Suspense fallback={<Loading />}><MerchantRegister /></React.Suspense>} />
 
-          {/* Customer */}
-          <Route path="/customer" element={<AuthGuard requiredRole="customer"><CustomerLayout /></AuthGuard>}>
+          {/* Customer — Public routes (no auth required) */}
+          <Route path="/customer" element={<CustomerLayout />}>
             <Route index element={<CustomerHome />} />
             <Route path="search" element={<CustomerSearch />} />
             <Route path="restaurant/:id" element={<RestaurantDetail />} />
-            <Route path="checkout" element={<CustomerCheckout />} />
-            <Route path="order/:id" element={<OrderTracking />} />
-            <Route path="orders" element={<OrderHistory />} />
-            <Route path="profile" element={<CustomerProfile />} />
-            <Route path="vouchers" element={<CustomerVouchers />} />
-            <Route path="favorites" element={<CustomerFavorites />} />
-            <Route path="review/:orderId" element={<ReviewPage />} />
+
+            {/* Customer — Protected routes (auth required, uses Outlet nesting) */}
+            <Route element={<AuthGuard requiredRole="customer" />}>
+              <Route path="checkout" element={<CustomerCheckout />} />
+              <Route path="order/:id" element={<OrderTracking />} />
+              <Route path="orders" element={<OrderHistory />} />
+              <Route path="profile" element={<CustomerProfile />} />
+              <Route path="vouchers" element={<CustomerVouchers />} />
+              <Route path="favorites" element={<CustomerFavorites />} />
+              <Route path="review/:orderId" element={<ReviewPage />} />
+            </Route>
           </Route>
 
           {/* Merchant */}

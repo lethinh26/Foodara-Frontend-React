@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { apiClient } from './apiClient';
 import { delay, generateId } from '../utils/helpers';
+import { getGuestCartId } from '../utils/guestCart';
 import type { CartItem } from '../types/order';
 import type {
   AddCartItemPayload,
@@ -225,7 +226,7 @@ export const cartService = {
       await delay(200);
       return mockSnapshot;
     }
-    const response = await apiClient.get<BackendCartResponse>('/v1/cart');
+    const response = await apiClient.get<BackendCartResponse>('/v1/cart', undefined, { 'X-Guest-Cart-Id': getGuestCartId() });
     return mapBackendCart(response);
   },
 
@@ -290,7 +291,7 @@ export const cartService = {
       quantity: payload.quantity,
       optionItemIds: payload.optionItemIds,
       specialInstructions: payload.specialInstructions,
-    });
+    }, { 'X-Guest-Cart-Id': getGuestCartId() });
     return mapBackendCart(response);
   },
 
@@ -317,7 +318,7 @@ export const cartService = {
       quantity: payload.quantity,
       optionItemIds: payload.optionItemIds,
       specialInstructions: payload.specialInstructions,
-    });
+    }, { 'X-Guest-Cart-Id': getGuestCartId() });
     return mapBackendCart(response);
   },
 
@@ -329,7 +330,7 @@ export const cartService = {
       return mockSnapshot;
     }
 
-    const response = await apiClient.delete<BackendCartResponse>(`/v1/cart/items/${cartItemId}`);
+    const response = await apiClient.delete<BackendCartResponse>(`/v1/cart/items/${cartItemId}`, { 'X-Guest-Cart-Id': getGuestCartId() });
     return mapBackendCart(response);
   },
 
@@ -340,8 +341,8 @@ export const cartService = {
       return mockSnapshot;
     }
 
-    await apiClient.delete<void>('/v1/cart');
-    const response = await apiClient.get<BackendCartResponse>('/v1/cart');
+    await apiClient.delete<void>('/v1/cart', { 'X-Guest-Cart-Id': getGuestCartId() });
+    const response = await apiClient.get<BackendCartResponse>('/v1/cart', undefined, { 'X-Guest-Cart-Id': getGuestCartId() });
     return mapBackendCart(response);
   },
 
