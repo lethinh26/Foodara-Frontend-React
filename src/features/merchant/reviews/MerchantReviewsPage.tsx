@@ -1,11 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Rate, Typography, Empty, Skeleton, Space, Tag, Avatar } from 'antd';
+import { Card, Rate, Typography, Empty, Skeleton, Space, Tag, Avatar, Image } from 'antd';
 import { MessageSquare } from 'lucide-react';
 import { merchantService } from '../../../services/merchantService';
 import { apiClient } from '../../../services/apiClient';
 import { formatRelativeTime } from '../../../utils/format';
 
 const { Title, Text, Paragraph } = Typography;
+
+interface ReviewImage {
+  id: string;
+  imageUrl: string;
+}
 
 interface StoreReview {
   id: string;
@@ -15,6 +20,7 @@ interface StoreReview {
   customerAvatar?: string;
   isAnonymous?: boolean;
   createdAt?: string;
+  images?: ReviewImage[];
 }
 
 const MerchantReviewsPage: React.FC = () => {
@@ -73,6 +79,17 @@ const MerchantReviewsPage: React.FC = () => {
                   <Rate disabled value={rev.storeRating ?? 0} style={{ fontSize: 14, marginTop: 4 }} />
                   {rev.storeComment && (
                     <Paragraph style={{ margin: '8px 0 0', fontSize: 14 }}>{rev.storeComment}</Paragraph>
+                  )}
+                  {rev.images && rev.images.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <Image.PreviewGroup>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {rev.images.map((img, idx) => (
+                            <Image key={idx} src={img.imageUrl} width={72} height={72} style={{ borderRadius: 8, objectFit: 'cover' }} />
+                          ))}
+                        </div>
+                      </Image.PreviewGroup>
+                    </div>
                   )}
                 </div>
               </div>

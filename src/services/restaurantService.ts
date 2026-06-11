@@ -361,20 +361,27 @@ function mapBackendCombo(combo: BackendComboResponse) {
 }
 
 function mapBackendReview(r: BackendReviewResponse): Review {
+  const items = ((r as Record<string, unknown>).items as Array<Record<string, unknown>>) || [];
   return {
     id: String(r.id || ''),
-    orderId: String(r.order_id || ''),
+    orderId: String(r.order_id || (r as Record<string, unknown>).orderId || ''),
     customerId: String(r.customer_id || ''),
     customerName: String(r.customer_name || (r as Record<string, unknown>).customerName || 'Khách hàng'),
     customerAvatar: String(r.customer_avatar || (r as Record<string, unknown>).customerAvatar || ''),
     restaurantId: String(r.store_id || (r as Record<string, unknown>).storeId || ''),
-    driverId: r.driver_id ? String(r.driver_id) : null,
+    driverId: r.driver_id ? String(r.driver_id) : (((r as Record<string, unknown>).driverId as string) || null),
     restaurantRating: Number(r.store_rating ?? (r as Record<string, unknown>).storeRating ?? 0),
-    driverRating: r.driver_rating != null ? Number(r.driver_rating) : null,
+    driverRating: r.driver_rating != null ? Number(r.driver_rating) : Number((r as Record<string, unknown>).driverRating ?? 0) || null,
     foodRating: Number(r.food_rating || 0),
     comment: String(r.comment ?? (r as Record<string, unknown>).storeComment ?? ''),
     tags: r.tags || [],
     images: r.images || [],
+    items: items.map((it: Record<string, unknown>) => ({
+      menuItemId: String(it.menuItemId || ''),
+      menuItemName: String(it.menuItemName || ''),
+      rating: Number(it.rating ?? 0),
+      comment: String(it.comment || ''),
+    })),
     reply: r.reply ? {
       id: '',
       content: r.reply.content || '',

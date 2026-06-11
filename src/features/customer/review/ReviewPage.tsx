@@ -1,12 +1,66 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Rate, Input, Button, Typography, Tag, message, Space, Spin, Result } from 'antd';
-import { ArrowLeft } from 'lucide-react';
+import { Card, Form, Rate, Input, Button, Typography, message, Spin, Result, Upload } from 'antd';
+import { ArrowLeft, Upload as UploadIcon } from 'lucide-react';
 import { orderService } from '../../../services/orderService';
 import { reviewService, type ReviewResponse, type CreateReviewPayload } from '../../../services/reviewService';
+import { uploadToCloudinary } from '../../../services/uploadService';
 import type { Order } from '../../../types/order';
 
 const { Title, Text } = Typography;
+
+interface UploadListProps {
+  uploadedUrls: string[];
+  onUploaded: (urls: string[]) => void;
+}
+
+const UploadList: React.FC<UploadListProps> = ({ uploadedUrls, onUploaded }) => {
+  const [fileList, setFileList] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      const newUrls = [...uploadedUrls, url];
+      onUploaded(newUrls);
+      message.success('Tải ảnh thành công');
+      return false; // prevent default upload
+    } catch {
+      message.error('Tải ảnh thất bại');
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <Upload
+      listType="picture-card"
+      fileList={uploadedUrls.map((url, i) => ({
+        uid: `${i}-${Date.now()}`,
+        name: `image-${i}`,
+        status: 'done',
+        url,
+      }))}
+      customRequest={({ file }) => handleUpload(file as File)}
+      showUploadList={{ showPreviewIcon: true, showRemoveIcon: true }}
+      onRemove={(file) => {
+        const newUrls = uploadedUrls.filter((_, i) => i !== fileList.indexOf(file));
+        onUploaded(newUrls);
+      }}
+      maxCount={5}
+      accept="image/*"
+    >
+      {uploadedUrls.length < 5 && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          {uploading ? <Spin size="small" /> : <UploadIcon size={20} />}
+          <Text style={{ fontSize: 12 }}>{uploading ? 'Đang tải...' : 'Tải ảnh'}</Text>
+        </div>
+      )}
+    </Upload>
+  );
+};
 
 const ReviewPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -15,9 +69,8 @@ const ReviewPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<Order | null>(null);
   const [existingReview, setExistingReview] = useState<ReviewResponse | null>(null);
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
 
-  const TAGS = ['Ngon', 'Giao nhanh', 'Đóng gói đẹp', 'Nhiều lượng', 'Đúng vị', 'Tươi ngon', 'Giá hợp lý', 'Nhân viên thân thiện'];
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -62,8 +115,8 @@ const ReviewPage: React.FC = () => {
         storeComment: values.comment,
         driverRating: values.driverRating,
         isAnonymous: false,
-        tags: selectedTags.length > 0 ? selectedTags : undefined,
         items: itemRatings.length > 0 ? itemRatings : undefined,
+        imageUrls: uploadedUrls.length > 0 ? uploadedUrls : undefined,
       });
       message.success('Cảm ơn bạn đã đánh giá!');
       navigate('/customer/orders');
@@ -82,12 +135,43 @@ const ReviewPage: React.FC = () => {
     return (
       <div style={{ maxWidth: 600, margin: '0 auto', padding: 24 }} className="animate-fade-in">
         <Button type="text" icon={<ArrowLeft size={18} />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Quay lại</Button>
-        <Result
-          status="success"
-          title="Bạn đã đánh giá đơn hàng này"
-          subTitle={`Đánh giá quán: ${existingReview.storeRating}/5 sao`}
-          extra={<Button type="primary" onClick={() => navigate('/customer/orders')}>Về danh sách đơn</Button>}
-        />
+        <Card style={{ borderRadius: 16, marginBottom: 16 }}>
+          <Result
+            status="success"
+            title="Bạn đã đánh giá đơn hàng này"
+            subTitle={
+              <div>
+                <div style={{ marginBottom: 8 }}>Đánh giá quán: <Rate disabled value={existingReview.storeRating ?? 0} /></div>
+                {existingReview.driverRating ? <div style={{ marginBottom: 8 }}>Đánh giá tài xế: <Rate disabled value={existingReview.driverRating} /></div> : null}
+                {existingReview.storeComment ? <Text type="secondary">{existingReview.storeComment}</Text> : null}
+              </div>
+            }
+          />
+          {existingReview.items && existingReview.items.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Text strong>Đánh giá từng món:</Text>
+              {existingReview.items.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border-soft)' }}>
+                  <Text>{item.menuItemName || item.menuItemId}</Text>
+                  <Rate disabled value={item.rating ?? 0} style={{ fontSize: 14 }} />
+                </div>
+              ))}
+            </div>
+          )}
+          {existingReview.images && existingReview.images.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Text strong>Ảnh đánh giá:</Text>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                {existingReview.images.map((img, idx) => (
+                  <img key={idx} src={img.imageUrl || (typeof img === 'string' ? img : '')} alt={`Ảnh ${idx + 1}`} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(img.imageUrl || (typeof img === 'string' ? img : ''), '_blank')} />
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Button type="primary" onClick={() => navigate('/customer/orders')}>Về danh sách đơn</Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -112,7 +196,6 @@ const ReviewPage: React.FC = () => {
           </Form.Item>
         </Card>
 
-        {/* Per-item ratings */}
         {order && order.items && order.items.length > 0 && (
           <Card style={{ borderRadius: 12, marginBottom: 16 }} title="Đánh giá từng món">
             {order.items.map((item) => (
@@ -129,25 +212,13 @@ const ReviewPage: React.FC = () => {
         )}
 
         <Card style={{ borderRadius: 12, marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>Từ khoá</Text>
-          <Space wrap>
-            {TAGS.map(tag => (
-              <Tag
-                key={tag}
-                style={{ cursor: 'pointer', borderRadius: 6, padding: '4px 12px' }}
-                color={selectedTags.includes(tag) ? 'green' : undefined}
-                onClick={() => setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])}
-              >
-                {tag}
-              </Tag>
-            ))}
-          </Space>
-        </Card>
-
-        <Card style={{ borderRadius: 12, marginBottom: 24 }}>
           <Form.Item name="comment" label="Nhận xét">
             <Input.TextArea rows={4} placeholder="Chia sẻ trải nghiệm của bạn..." maxLength={500} showCount />
           </Form.Item>
+        </Card>
+
+        <Card style={{ borderRadius: 12, marginBottom: 24 }} title="Hình ảnh (tối đa 5)">
+          <UploadList uploadedUrls={uploadedUrls} onUploaded={setUploadedUrls} />
         </Card>
 
         <Button type="primary" htmlType="submit" block size="large" loading={submitting} style={{ height: 48, borderRadius: 10, fontWeight: 600 }}>

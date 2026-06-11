@@ -1,3 +1,8 @@
+export interface ReviewImage {
+  id: string;
+  imageUrl: string;
+}
+
 export interface Review {
   id: string;
   orderId: string;
@@ -10,8 +15,9 @@ export interface Review {
   driverRating: number | null;
   foodRating: number;
   comment: string;
-  images: string[];
+  images: ReviewImage[];
   tags: string[];
+  items: { menuItemId: string; menuItemName: string; rating: number; comment: string }[];
   reply: ReviewReply | null;
   isAnonymous: boolean;
   createdAt: string;

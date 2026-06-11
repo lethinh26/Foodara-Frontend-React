@@ -7,8 +7,8 @@ export interface CreateReviewPayload {
   driverRating?: number;
   driverComment?: string;
   isAnonymous?: boolean;
-  tags?: string[];
   items?: Array<{ menuItemId: string; rating: number; comment?: string }>;
+  imageUrls?: string[];
 }
 
 export interface ReviewItemResponse {
@@ -16,6 +16,11 @@ export interface ReviewItemResponse {
   menuItemName?: string;
   rating: number | null;
   comment?: string;
+}
+
+export interface ReviewImageResponse {
+  id: string;
+  imageUrl: string;
 }
 
 export interface ReviewResponse {
@@ -28,8 +33,8 @@ export interface ReviewResponse {
   driverComment?: string;
   isAnonymous?: boolean;
   status?: string;
-  tags?: string[];
   items?: ReviewItemResponse[];
+  images?: ReviewImageResponse[];
   createdAt?: string;
   customerName?: string;
   customerAvatar?: string;

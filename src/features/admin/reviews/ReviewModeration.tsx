@@ -184,6 +184,11 @@ const ReviewModeration: React.FC = () => {
     { title: 'Quán ⭐', key: 'storeRating', width: 100, render: (_: unknown, r: AdminReview) => <Stars rating={r.storeRating} /> },
     { title: 'Tài xế ⭐', key: 'driverRating', width: 100, render: (_: unknown, r: AdminReview) => <Stars rating={r.driverRating} /> },
     { title: 'Trạng thái', dataIndex: 'status', key: 'status', width: 100, render: (s: ReviewStatus) => <Tag color={STATUS_COLORS[s]}>{STATUS_LABELS[s]}</Tag> },
+    { title: 'Ảnh', key: 'images', width: 80, render: (_: unknown, r: AdminReview) => (
+      r.images && r.images.length > 0
+        ? <AntImage src={r.images[0].imageUrl} width={36} height={36} style={{ borderRadius: 6, objectFit: 'cover' }} preview={{ mask: <Text style={{ fontSize: 10 }}>{r.images.length}</Text> }} />
+        : <Text type="secondary">—</Text>
+    )},
     { title: 'Ngày', dataIndex: 'createdAt', key: 'date', width: 110, render: (v: string) => formatDate(v) },
     { title: '', key: 'actions', width: 180, render: (_: unknown, r: AdminReview) => (
       <Space>

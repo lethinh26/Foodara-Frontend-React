@@ -691,6 +691,13 @@ const RestaurantDetailPage: React.FC = () => {
                       <Rate disabled value={rev.restaurantRating} style={{ fontSize: 14 }} />
                       <Paragraph style={{ margin: '8px 0 0' }}>{rev.comment}</Paragraph>
                       {rev.tags.length > 0 && <Space style={{ marginTop: 4 }}>{rev.tags.map(t => <Tag key={t}>{t}</Tag>)}</Space>}
+                      {rev.images && rev.images.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                          {rev.images.map((img, idx) => (
+                            <img key={idx} src={img.imageUrl || (typeof img === 'string' ? img : '')} alt={`Ảnh ${idx + 1}`} style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); window.open(img.imageUrl || (typeof img === 'string' ? img : ''), '_blank'); }} />
+                          ))}
+                        </div>
+                      )}
                       {rev.reply && (
                         <div style={{ background: 'var(--surface-soft)', borderRadius: 8, padding: 12, marginTop: 8 }}>
                           <Text strong style={{ fontSize: 12 }}>{rev.reply.repliedBy}</Text>
