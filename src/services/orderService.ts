@@ -143,6 +143,7 @@ function mapBackendOrder(raw: any): Order {
     driverId: raw.driverId || null,
     driverName: null,
     driverPhone: null,
+    refundStatus: raw.refundStatus || null,
     estimatedDeliveryTime: raw.estimatedTotalTime || raw.estimatedDeliveryTime || 35,
     actualDeliveryTime: null,
     note: raw.deliveryNote || '',

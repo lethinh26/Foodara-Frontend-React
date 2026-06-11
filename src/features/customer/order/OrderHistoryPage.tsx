@@ -41,8 +41,11 @@ const OrderHistoryPage: React.FC = () => {
       message.success('Đã huỷ đơn hàng');
       setCancelModalOpen(false);
       setCancelReason('');
+      const oid = cancelOrderId;
       setCancelOrderId(null);
       await loadOrders();
+      // Redirect to order detail so user can see refund options
+      navigate(`/customer/order/${oid}`);
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Không thể huỷ đơn hàng');
     } finally {

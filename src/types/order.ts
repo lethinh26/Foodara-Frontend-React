@@ -68,6 +68,7 @@ export interface Order {
   driverId: string | null;
   driverName: string | null;
   driverPhone: string | null;
+  refundStatus: 'bank' | 'voucher' | null;
   estimatedDeliveryTime: number; // minutes
   actualDeliveryTime: number | null;
   note: string;

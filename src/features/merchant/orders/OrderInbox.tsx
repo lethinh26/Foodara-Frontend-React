@@ -68,12 +68,23 @@ const OrderInbox: React.FC = () => {
     } catch { /* ignore */ }
   };
 
-  useWebSocket<Record<string, unknown>>({
+  useWebSocket<{ type?: string; orderId?: string; id?: string }>({
     topic: storeId ? `/topic/merchant.${storeId}.orders` : undefined,
     onMessage: (msg) => {
       if (!msg) return;
+
+      // ORDER_CANCELLED — remove order from list without API call
+      if (msg.type === 'ORDER_CANCELLED') {
+        const cancelledId = msg.orderId;
+        if (cancelledId) {
+          setOrders((prev) => prev.filter((o) => o.id !== cancelledId));
+          message.info('Một đơn hàng đã bị khách huỷ');
+        }
+        return;
+      }
+
       const orderId = (msg.orderId || msg.id) as string | undefined;
-      if (!orderId || !storeId) return;
+      if (!msg || !orderId || !storeId) return;
 
       playDing();
 

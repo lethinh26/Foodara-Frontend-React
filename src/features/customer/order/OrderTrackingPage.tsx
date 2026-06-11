@@ -23,7 +23,7 @@ const stepIcons: Record<string, React.ReactNode> = {
   delivered: <CheckCircle2 size={20} />,
 };
 
-const PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
+const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000;
 
 function buildMarkers(tracking: OrderTrackingResponse | null): MapMarker[] {
   if (!tracking) return [];
@@ -69,6 +69,7 @@ const OrderTrackingPage: React.FC = () => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [refundChoice, setRefundChoice] = useState<'bank' | 'voucher' | null>(null);
   const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const [refundDone, setRefundDone] = useState(false);
   const [refundResult, setRefundResult] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,7 +78,8 @@ const OrderTrackingPage: React.FC = () => {
     topic: id ? `/topic/orders.${id}` : undefined,
     onMessage: (msg) => {
       if (msg && msg.status) {
-        setOrder(prev => prev ? { ...prev, status: msg.status as Order['status'] } : prev);
+        // Full refresh to get statusHistory + updated state
+        loadOrder();
         message.info('Trạng thái đơn hàng vừa được cập nhật!');
       }
       // If driver location included, refresh tracking
@@ -102,6 +104,15 @@ const OrderTrackingPage: React.FC = () => {
   useEffect(() => {
     Promise.all([loadOrder(), loadTracking()]).finally(() => setLoading(false));
   }, [loadOrder, loadTracking]);
+
+  // Sync refundDone from order data
+  useEffect(() => {
+    if (order && (order as any).refundStatus) {
+      setRefundDone(true);
+      const status = (order as any).refundStatus;
+      setRefundResult(status === 'voucher' ? 'Đã hoàn tiền bằng voucher' : 'Đã ghi nhận hoàn tiền về tài khoản');
+    }
+  }, [order?.id]);
 
   // Payment callback from SePay redirect
   useEffect(() => {
@@ -135,6 +146,16 @@ const OrderTrackingPage: React.FC = () => {
     return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, [order?.createdAt, order?.paymentMethod, order?.paymentStatus]);
 
+  // Auto-cancel when QR timer expires
+  useEffect(() => {
+    if (!order) return;
+    const isQr = order.paymentMethod === 'qr' || order.paymentMethod === 'pm-qr';
+    if (!isQr || order.paymentStatus !== 'pending') return;
+    if (countdown !== null && countdown <= 0) {
+      orderService.cancelOrder(order.id, 'Hết thời gian thanh toán');
+    }
+  }, [countdown, order?.id, order?.paymentMethod, order?.paymentStatus]);
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
       <Spin size="large" />
@@ -152,9 +173,14 @@ const OrderTrackingPage: React.FC = () => {
   const isCancelled = order.status === 'cancelled';
   const isQrPayment = order.paymentMethod === 'pm-qr' || order.paymentMethod === 'qr';
   const isPendingPayment = order.paymentStatus === 'pending';
+  const isAwaitingPayment = isQrPayment && isPendingPayment && !isCancelled;
+  const hasRefunded = (order as any).refundStatus != null;
   const countdownMin = countdown !== null ? Math.floor(countdown / 60000) : 0;
   const countdownSec = countdown !== null ? Math.floor((countdown % 60000) / 1000) : 0;
   const isExpired = countdown !== null && countdown <= 0;
+
+  const displayStatus = isQrPayment && isPendingPayment && !isCancelled ? 'awaiting_payment' : order.status;
+  const AWAITING_PAYMENT_LABEL = 'Chờ thanh toán';
 
   const handleRefundChoose = (choice: 'bank' | 'voucher') => {
     setRefundChoice(choice);
@@ -172,8 +198,15 @@ const OrderTrackingPage: React.FC = () => {
         await orderService.chooseRefund(order!.id, 'voucher');
         message.success('Voucher hoàn tiền đã được tạo và thêm vào ví của bạn!');
       }
-      // Redirect to home with refund notification for NotificationService
-      navigate(`/?refund=done&type=${refundChoice}&amount=${order!.pricing.total}&orderNumber=${order!.orderNumber}`);
+      // Refresh order to get refundStatus from backend
+      const updated = await loadOrder();
+      if (updated && (updated as any).refundStatus) {
+        setRefundDone(true);
+        const status = (updated as any).refundStatus;
+        setRefundResult(status === 'voucher'
+          ? 'Đã hoàn tiền bằng voucher'
+          : 'Đã hoàn tiền về tài khoản ngân hàng');
+      }
     } catch {
       message.error('Không thể xử lý yêu cầu. Vui lòng thử lại.');
     } finally {
@@ -211,8 +244,8 @@ const OrderTrackingPage: React.FC = () => {
             gap: 12,
             padding: '14px 18px',
             borderRadius: 14,
-            border: '1px solid rgba(244,67,54,0.25)',
-            background: 'linear-gradient(135deg, rgba(244,67,54,0.06) 0%, rgba(244,67,54,0.12) 100%)',
+            border: '1px solid rgba(244,67,54,0.2)',
+            background: '#FFF5F5',
             color: '#b71c1c',
             marginBottom: 20,
           }}
@@ -240,87 +273,102 @@ const OrderTrackingPage: React.FC = () => {
           boxShadow: '0 4px 20px rgba(255,152,0,0.12)', overflow: 'hidden',
         }}>
           <div style={{
-            background: 'linear-gradient(135deg, #FF9800 0%, #FFB74D 100%)',
+            background: '#FFF3E0',
             margin: '-24px -24px 20px', padding: '20px 24px',
             display: 'flex', alignItems: 'center', gap: 12,
+            borderBottom: '3px solid #FF9800',
           }}>
             <div style={{
               width: 40, height: 40, borderRadius: 12,
-              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              background: '#FF9800', display: 'flex',
               alignItems: 'center', justifyContent: 'center',
             }}>
               <AlertTriangle size={22} color="#fff" />
             </div>
             <div>
-              <Text style={{ color: '#fff', fontWeight: 700, fontSize: 16, display: 'block' }}>Hoàn tiền</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Đơn hàng đã thanh toán {formatVND(order.pricing.total)}, vui lòng chọn hình thức hoàn tiền</Text>
+              <Text style={{ color: '#E65100', fontWeight: 700, fontSize: 16, display: 'block' }}>Hoàn tiền</Text>
+              <Text style={{ color: '#BF360C', fontSize: 12 }}>Đơn hàng đã thanh toán {formatVND(order.pricing.total)}, vui lòng chọn hình thức hoàn tiền</Text>
             </div>
           </div>
 
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Card
-              hoverable
-              onClick={() => handleRefundChoose('bank')}
-              style={{
-                borderRadius: 12, border: refundChoice === 'bank' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
-                background: refundChoice === 'bank' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}
-              bodyStyle={{ padding: '16px 18px' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #43A047, #66BB6A)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Banknote size={22} color="#fff" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Text strong style={{ fontSize: 14, display: 'block' }}>Hoàn tiền về tài khoản</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Chúng tôi sẽ xử lý hoàn tiền trong 24h</Text>
-                </div>
-                {refundChoice === 'bank' && <CheckCircle size={20} color="var(--primary)" />}
-              </div>
-            </Card>
 
-            <Card
-              hoverable
-              onClick={() => handleRefundChoose('voucher')}
-              style={{
-                borderRadius: 12, border: refundChoice === 'voucher' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
-                background: refundChoice === 'voucher' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
-                cursor: 'pointer', transition: 'all 0.2s',
-              }}
-              bodyStyle={{ padding: '16px 18px' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Ticket size={22} color="#fff" />
+            {refundDone ? (
+              <div style={{ padding: '20px 14px', textAlign: 'center' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <CheckCircle size={40} color="var(--success)" />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <Text strong style={{ fontSize: 14, display: 'block' }}>Nhận mã voucher</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Nhận voucher giảm giá {formatVND(order.pricing.total)} cho đơn sau</Text>
-                </div>
-                {refundChoice === 'voucher' && <CheckCircle size={20} color="var(--primary)" />}
+                <Text strong style={{ fontSize: 16, display: 'block', color: 'var(--success)', marginBottom: 4 }}>{refundResult}</Text>
+                <Text type="secondary" style={{ fontSize: 13 }}>Cảm ơn bạn!</Text>
               </div>
-            </Card>
+            ) : (
+              <>
+                <Card
+                  hoverable
+                  onClick={() => handleRefundChoose('bank')}
+                  style={{
+                    borderRadius: 12, border: refundChoice === 'bank' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                    background: refundChoice === 'bank' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                  bodyStyle={{ padding: '16px 18px' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: '#43A047', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Banknote size={22} color="#fff" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Text strong style={{ fontSize: 14, display: 'block' }}>Hoàn tiền về tài khoản</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Chúng tôi sẽ xử lý hoàn tiền trong 24h</Text>
+                    </div>
+                    {refundChoice === 'bank' && <CheckCircle size={20} color="var(--primary)" />}
+                  </div>
+                </Card>
 
-            {refundResult && (
-              <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(76,175,80,0.08)', border: '1px dashed var(--success)' }}>
-                <Text style={{ color: 'var(--success)', fontWeight: 600, fontSize: 14, display: 'block' }}>
-                  {refundResult}
-                </Text>
-              </div>
+                <Card
+                  hoverable
+                  onClick={() => handleRefundChoose('voucher')}
+                  style={{
+                    borderRadius: 12, border: refundChoice === 'voucher' ? '2px solid var(--primary)' : '1px solid var(--border-soft)',
+                    background: refundChoice === 'voucher' ? 'rgba(76,175,80,0.04)' : 'var(--surface)',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                  bodyStyle={{ padding: '16px 18px' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: '#6C5CE7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Ticket size={22} color="#fff" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Text strong style={{ fontSize: 14, display: 'block' }}>Nhận mã voucher</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Nhận voucher giảm giá {formatVND(order.pricing.total)} cho đơn sau</Text>
+                    </div>
+                    {refundChoice === 'voucher' && <CheckCircle size={20} color="var(--primary)" />}
+                  </div>
+                </Card>
+
+                {refundResult && (
+                  <div style={{ padding: '14px 18px', borderRadius: 12, background: 'rgba(76,175,80,0.08)', border: '1px dashed var(--success)' }}>
+                    <Text style={{ color: 'var(--success)', fontWeight: 600, fontSize: 14, display: 'block' }}>
+                      {refundResult}
+                    </Text>
+                  </div>
+                )}
+
+                <Button
+                  type="primary"
+                  block
+                  size="large"
+                  loading={refundSubmitting}
+                  disabled={!refundChoice}
+                  onClick={handleRefundConfirm}
+                  style={{ height: 48, borderRadius: 12, fontWeight: 600 }}
+                >
+                  {refundChoice === 'voucher' ? 'Xác nhận nhận voucher' : 'Xác nhận hoàn tiền'}
+                </Button>
+              </>
             )}
 
-            <Button
-              type="primary"
-              block
-              size="large"
-              loading={refundSubmitting}
-              disabled={!refundChoice}
-              onClick={handleRefundConfirm}
-              style={{ height: 48, borderRadius: 12, fontWeight: 600 }}
-            >
-              {refundChoice === 'voucher' ? 'Xác nhận nhận voucher' : 'Xác nhận hoàn tiền'}
-            </Button>
           </Space>
         </Card>
       )}
@@ -334,15 +382,15 @@ const OrderTrackingPage: React.FC = () => {
             <Text strong style={{ fontSize: 18, letterSpacing: 0.5 }}>#{order.orderNumber}</Text>
           </div>
           <Tag
-            color={ORDER_STATUS_COLORS[order.status]}
+            color={isAwaitingPayment ? '#FF9800' : ORDER_STATUS_COLORS[order.status]}
             style={{ fontSize: 13, padding: '4px 14px', borderRadius: 20, fontWeight: 600, margin: 0 }}
           >
-            {ORDER_STATUS_LABELS[order.status]}
+            {isAwaitingPayment ? AWAITING_PAYMENT_LABEL : ORDER_STATUS_LABELS[order.status]}
           </Tag>
         </div>
 
-        {/* Progress Steps */}
-        {!isCancelled && (
+        {/* Progress Steps — only when paid (COD always shows, QR waits) */}
+        {!isCancelled && !isAwaitingPayment && (
           <div style={{ padding: '8px 0 4px', marginBottom: 8 }}>
             <Steps
               current={currentStep}
@@ -354,7 +402,7 @@ const OrderTrackingPage: React.FC = () => {
                   <div style={{
                     width: 42, height: 42, minWidth: 42, minHeight: 42, borderRadius: '50%',
                     background: statusSteps.indexOf(s) <= currentStep
-                      ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)'
+                      ? 'var(--primary)'
                       : 'var(--surface-soft)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: statusSteps.indexOf(s) <= currentStep ? '#fff' : 'var(--text-muted)',
@@ -381,13 +429,13 @@ const OrderTrackingPage: React.FC = () => {
         {!isCancelled && order.status !== 'delivered' && (
           <div style={{
             marginTop: 16, padding: '14px 18px', borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(76,175,80,0.08) 0%, rgba(56,142,60,0.12) 100%)',
-            border: '1px solid rgba(76,175,80,0.15)',
+            background: 'var(--surface-soft)',
+            border: '1px solid var(--border-soft)',
             display: 'flex', alignItems: 'center', gap: 14,
           }}>
             <div style={{
               width: 42, height: 42, borderRadius: 12,
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+              background: 'var(--primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
               <Clock size={20} color="#fff" />
@@ -407,30 +455,31 @@ const OrderTrackingPage: React.FC = () => {
         )}
       </Card>
 
-      {/* QR Payment Section */}
-      {isQrPayment && isPendingPayment && (
+      {/* QR Payment Section — hide when cancelled or expired */}
+      {isQrPayment && isPendingPayment && !isCancelled && !isExpired && (
         <Card style={{
           borderRadius: 16, marginBottom: 20, border: '2px solid #6C5CE7',
           boxShadow: '0 4px 20px rgba(108,92,231,0.12)', overflow: 'hidden',
         }}>
           <div style={{
-            background: 'linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%)',
+            background: '#EEEEFF',
             margin: '-24px -24px 20px', padding: '20px 24px',
             display: 'flex', alignItems: 'center', gap: 12,
+            borderBottom: '3px solid #6C5CE7',
           }}>
             <div style={{
               width: 40, height: 40, borderRadius: 12,
-              background: 'rgba(255,255,255,0.2)', display: 'flex',
+              background: '#6C5CE7', display: 'flex',
               alignItems: 'center', justifyContent: 'center',
             }}>
               <QrCode size={22} color="#fff" />
             </div>
             <div>
-              <Text style={{ color: '#fff', fontWeight: 700, fontSize: 16, display: 'block' }}>Thanh toán QR</Text>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>Quét mã bên dưới để thanh toán</Text>
+              <Text style={{ color: '#1A1A2E', fontWeight: 700, fontSize: 16, display: 'block' }}>Thanh toán QR</Text>
+              <Text style={{ color: '#333', fontSize: 12 }}>Quét mã bên dưới để thanh toán</Text>
             </div>
             <Tag style={{
-              marginLeft: 'auto', background: isExpired ? 'rgba(255,0,0,0.3)' : 'rgba(255,255,255,0.2)',
+              marginLeft: 'auto', background: isExpired ? 'rgba(255,0,0,0.2)' : '#6C5CE7',
               border: 'none', color: '#fff', fontWeight: 600, borderRadius: 20,
             }}>
               {isExpired ? 'Hết thời gian' : `${String(countdownMin).padStart(2,'0')}:${String(countdownSec).padStart(2,'0')}`}
@@ -510,7 +559,7 @@ const OrderTrackingPage: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{
               width: 44, height: 44, borderRadius: 12,
-              background: 'linear-gradient(135deg, #43A047 0%, #66BB6A 100%)',
+              background: '#43A047',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
               <Banknote size={22} color="#fff" />
@@ -534,7 +583,7 @@ const OrderTrackingPage: React.FC = () => {
         {order.driverName && (
           <Card style={{ borderRadius: 16, border: 'none', boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
-              <Avatar size={52} style={{ background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)' }}>
+              <Avatar size={52} style={{ background: 'var(--primary)' }}>
                 <Bike size={24} color="#fff" />
               </Avatar>
               <div>
@@ -554,7 +603,7 @@ const OrderTrackingPage: React.FC = () => {
             {order.restaurantLogo ? (
               <Avatar size={52} src={order.restaurantLogo} shape="square" style={{ borderRadius: 12 }} />
             ) : (
-              <Avatar size={52} style={{ background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)' }}>
+              <Avatar size={52} style={{ background: 'var(--secondary)' }}>
                 <Store size={24} color="#fff" />
               </Avatar>
             )}
@@ -574,7 +623,7 @@ const OrderTrackingPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: 'linear-gradient(135deg, var(--secondary) 0%, #e65100 100%)',
+            background: 'var(--secondary)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <Package size={16} color="#fff" />
@@ -634,7 +683,7 @@ const OrderTrackingPage: React.FC = () => {
 
         <div style={{
           marginTop: 12, padding: '12px 16px', borderRadius: 12,
-          background: 'linear-gradient(135deg, rgba(76,175,80,0.06) 0%, rgba(56,142,60,0.1) 100%)',
+          background: 'var(--surface-soft)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <Text strong style={{ fontSize: 15 }}>Tổng cộng</Text>
@@ -647,7 +696,7 @@ const OrderTrackingPage: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,
-            background: 'linear-gradient(135deg, #2196F3 0%, #42A5F5 100%)',
+            background: '#2196F3',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <Clock size={16} color="#fff" />
@@ -673,7 +722,7 @@ const OrderTrackingPage: React.FC = () => {
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                   background: i === (order.statusHistory?.length ?? 0) - 1
-                    ? 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)'
+                    ? 'var(--primary)'
                     : 'var(--surface)',
                   border: i === (order.statusHistory?.length ?? 0) - 1 ? 'none' : '2px solid var(--border-soft)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',

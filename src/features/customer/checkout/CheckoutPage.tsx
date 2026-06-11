@@ -89,27 +89,6 @@ const CheckoutPage: React.FC = () => {
     const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [addressForm] = Form.useForm();
 
-    // QR inline state
-    const [placed, setPlaced] = useState(false);
-    const [qrOrder, setQrOrder] = useState<{ orderId: string; orderNumber: string; totalAmount: number } | null>(null);
-    const qrPollRef = useRef<ReturnType<typeof setInterval>>();
-
-    // Poll QR payment when placed
-    useEffect(() => {
-        if (!placed || !qrOrder) return;
-        const poll = async () => {
-            try {
-                const order = await orderService.getOrderById(qrOrder.orderId);
-                if (order && (order.paymentStatus === 'paid' || order.paymentStatus === 'PAID')) {
-                    message.success('Thanh toán thành công!');
-                    navigate(`/customer/order/${qrOrder.orderId}`);
-                }
-            } catch { /* ignore */ }
-        };
-        qrPollRef.current = setInterval(poll, 3000);
-        return () => { if (qrPollRef.current) clearInterval(qrPollRef.current); };
-    }, [placed, qrOrder, navigate]);
-
     const loadAddresses = async () => {
         setLoadingAddresses(true);
         try {
@@ -425,13 +404,7 @@ const CheckoutPage: React.FC = () => {
             message.success('Đặt hàng thành công!');
 
             if (paymentMethod === 'qr') {
-                // Show QR inline instead of navigating
-                setQrOrder({
-                    orderId: result.orderId,
-                    orderNumber: result.orderNumber,
-                    totalAmount: result.totalAmount,
-                });
-                setPlaced(true);
+                navigate(`/customer/order/${result.orderId}`);
             } else {
                 navigate(`/customer/order/${result.orderId}`);
             }
@@ -442,47 +415,6 @@ const CheckoutPage: React.FC = () => {
             setLoading(false);
         }
     };
-
-    // QR inline view after placing order
-    if (placed && qrOrder) {
-        const qrUrl = `https://qr.sepay.vn/img?bank=MBBank&acc=0943941773&template=compact&des=${qrOrder.orderNumber}&amount=${qrOrder.totalAmount}`;
-        const copyCode = () => {
-            navigator.clipboard.writeText(qrOrder.orderNumber);
-            message.success('Đã sao mã!');
-        };
-        return (
-            <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 100px' }} className="animate-fade-in">
-                <div style={{ textAlign: 'center', marginBottom: 24 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                        <QrCode size={28} color="#fff" />
-                    </div>
-                    <Title level={4} style={{ margin: 0 }}>Quét mã để thanh toán</Title>
-                    <Text type="secondary">Mở app ngân hàng, quét mã QR và chuyển khoản đúng nội dung</Text>
-                </div>
-                <Card style={{ borderRadius: 16, border: '1.5px solid var(--border-soft)', boxShadow: 'var(--shadow-md)', marginBottom: 20, padding: 20, textAlign: 'center' }}>
-                    <img src={qrUrl} alt="QR" style={{ width: 240, height: 240, borderRadius: 12, marginBottom: 16 }} />
-                    <div onClick={copyCode} style={{ padding: '12px 16px', borderRadius: 10, background: 'var(--surface-soft)', border: '1px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-                        <div style={{ textAlign: 'left' }}>
-                            <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Nội dung CK</Text>
-                            <Text strong style={{ fontSize: 18, fontFamily: 'monospace' }}>{qrOrder.orderNumber}</Text>
-                        </div>
-                        <Button icon={<Copy size={16} />} size="small">Sao chép</Button>
-                    </div>
-                </Card>
-                <Card style={{ borderRadius: 14, border: 'none', boxShadow: 'var(--shadow-sm)', marginBottom: 20 }}>
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Số tiền</Text><Text strong style={{ fontSize: 18, color: 'var(--primary)' }}>{formatVND(qrOrder.totalAmount)}</Text></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Ngân hàng</Text><Text>MBBank</Text></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary">Số TK</Text><Text strong style={{ fontFamily: 'monospace' }}>0943941773</Text></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}><Text type="secondary"><Clock size={14} style={{ marginRight: 4 }} />Trạng thái</Text><Tag color="processing">Đang chờ thanh toán...</Tag></div>
-                    </Space>
-                </Card>
-                <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
-                    Hệ thống tự xác nhận khi nhận chuyển khoản. Trang sẽ tự chuyển sang theo dõi đơn hàng.
-                </Text>
-            </div>
-        );
-    }
 
     return (
         <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 24px 100px' }} className="animate-fade-in">
