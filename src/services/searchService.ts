@@ -9,29 +9,32 @@ interface BackendStore {
   name: string;
   slug: string;
   description: string;
-  address_line: string;
+  addressLine: string;
+  ward: string;
+  districtName: string;
+  cityName: string;
   latitude: number;
   longitude: number;
   phone: string;
-  is_open?: boolean;
-  isOpen?: boolean;
-  is_active: boolean;
-  avg_preparation_time: number;
-  min_order_amount: number;
-  avg_rating: number;
-  total_ratings: number;
-  total_orders: number;
-  cover_image_url?: string;
-  coverImageUrl?: string;
-  logo_url: string;
-  created_at: string;
+  isOpen: boolean;
+  isActive: boolean;
+  avgPreparationTime: number;
+  minOrderAmount: number;
+  avgRating: number;
+  totalRatings: number;
+  totalOrders: number;
+  coverImageUrl: string;
+  logoUrl: string;
+  createdAt: string;
   distance: number;
-  estimated_delivery_time: number;
-  delivery_fee: number;
-  has_promotion: boolean;
-  promotion_text: string;
-  is_new: boolean;
-  is_featured: boolean;
+  estimatedDeliveryTime: number;
+  deliveryFee: number;
+  hasPromotion: boolean;
+  promotionText: string;
+  isNew: boolean;
+  isFeatured: boolean;
+  location: string;
+  isOpenNow: boolean;
 }
 
 function mapBackendStore(s: BackendStore): Restaurant {
@@ -40,30 +43,30 @@ function mapBackendStore(s: BackendStore): Restaurant {
     name: s.name,
     slug: s.slug || '',
     description: s.description || '',
-    coverImage: s.cover_image_url || s.coverImageUrl || '',
-    logo: s.logo_url || '',
+    coverImage: s.coverImageUrl || '',
+    logo: s.logoUrl || '',
     categories: [],
     categoryNames: [],
-    address: s.address_line || '',
+    address: s.addressLine || [s.ward, s.districtName, s.cityName].filter(Boolean).join(', ') || '',
     coordinates: { lat: s.latitude || 0, lng: s.longitude || 0 },
     phone: s.phone || '',
-    rating: s.avg_rating || 0,
-    reviewCount: s.total_ratings || 0,
-    deliveryFee: s.delivery_fee || 0,
-    minOrder: s.min_order_amount || 0,
-    estimatedDeliveryTime: s.estimated_delivery_time || 30,
+    rating: s.avgRating || 0,
+    reviewCount: s.totalRatings || 0,
+    deliveryFee: s.deliveryFee || 0,
+    minOrder: s.minOrderAmount || 0,
+    estimatedDeliveryTime: s.estimatedDeliveryTime || s.avgPreparationTime || 30,
     distance: s.distance || 0,
     openingHours: [],
-    status: (s.is_open ?? s.isOpen) ? 'open' : 'closed',
-    isVerified: true,
-    isFeatured: s.is_featured || false,
-    isNew: s.is_new || false,
-    hasPromotion: s.has_promotion || false,
-    promotionText: s.promotion_text || '',
-    totalOrders: s.total_orders || 0,
+    status: s.isOpen ? 'open' : 'closed',
+    isVerified: s.isActive ?? true,
+    isFeatured: s.isFeatured || false,
+    isNew: s.isNew || false,
+    hasPromotion: s.hasPromotion || false,
+    promotionText: s.promotionText || '',
+    totalOrders: s.totalOrders || 0,
     merchantId: '',
-    createdAt: s.created_at || '',
-    updatedAt: s.created_at || '',
+    createdAt: s.createdAt || '',
+    updatedAt: s.createdAt || '',
   };
 }
 

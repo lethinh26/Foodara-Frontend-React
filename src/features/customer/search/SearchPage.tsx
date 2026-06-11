@@ -156,18 +156,24 @@ const SearchPage: React.FC = () => {
           {restaurants.map(r => (
             <Col key={r.id} xs={24} sm={12} md={8} lg={6}>
               <Card hoverable style={{ borderRadius: 12, overflow: 'hidden', height: '100%' }}
-                cover={<div style={{ position: 'relative', height: 150, overflow: 'hidden' }}><img src={r.coverImage} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />{r.hasPromotion && <Tag color="orange" style={{ position: 'absolute', top: 8, left: 8 }}>{r.promotionText}</Tag>}</div>}
+                cover={<div style={{ position: 'relative', height: 150, overflow: 'hidden' }}><img src={r.coverImage} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />{(r.hasPromotion || r.promotionText) && <Tag color="orange" style={{ position: 'absolute', top: 8, left: 8 }}>{r.promotionText || 'Khuyến mãi'}</Tag>}</div>}
                 onClick={() => navigate(`/customer/restaurant/${r.id}`)}
               >
-                <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>{r.name}</Text>
+                <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }} ellipsis={{ tooltip: r.name }}>{r.name}</Text>
                 <Space size={8} style={{ marginBottom: 4 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--secondary)', fontWeight: 600, fontSize: 13 }}><Star size={13} fill="var(--secondary)" />{r.rating}</span>
                   <Text type="secondary" style={{ fontSize: 12 }}>({r.reviewCount})</Text>
                 </Space>
+                {r.address && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>
+                    <MapPin size={11} />
+                    <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: r.address }}>{r.address}</Text>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 10, color: 'var(--text-muted)', fontSize: 12, flexWrap: 'wrap', minHeight: 16 }}>
                   {quotesLoading ? (
                     <Skeleton.Input active size="small" style={{ width: 180, height: 12 }} />
-                  ) : userOrigin && (r.distance > 0 || r.estimatedDeliveryTime > 0) ? (
+                  ) : (userOrigin && (r.distance > 0 || r.estimatedDeliveryTime > 0)) ? (
                     <>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><MapPin size={11} />{formatDistance(r.distance)}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={11} />{formatETA(r.estimatedDeliveryTime)}</span>
